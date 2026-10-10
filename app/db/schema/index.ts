@@ -1,7 +1,7 @@
 // Single entry point for drizzle-kit and the application. Definitions only: no connections here.
-export * from "./values";
-export * from "./identity";
-export * from "./campus";
-export * from "./submissions";
-export * from "./workflow";
-export * from "./relations";
+export * from "./values.ts";
+export * from "./identity.ts";
+export * from "./campus.ts";
+export * from "./submissions.ts";
+export * from "./workflow.ts";
+export * from "./relations.ts";

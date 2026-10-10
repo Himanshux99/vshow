@@ -1,9 +1,9 @@
 import { sql } from "drizzle-orm";
 import { check, foreignKey, index, jsonb, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
-import { REVIEW_DECISIONS, SCHEDULE_STATUSES, sqlList } from "./values";
-import { appUser } from "./identity";
-import { screen } from "./campus";
-import { mediaVersion, submission } from "./submissions";
+import { REVIEW_DECISIONS, SCHEDULE_STATUSES, sqlList } from "./values.ts";
+import { appUser } from "./identity.ts";
+import { screen } from "./campus.ts";
+import { mediaVersion, submission } from "./submissions.ts";
 
 // Schema doc §4.10 (append-only)
 export const reviewDecision = pgTable(

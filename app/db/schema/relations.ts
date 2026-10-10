@@ -1,8 +1,8 @@
 import { relations } from "drizzle-orm";
-import { appRole, appUser, userRole } from "./identity";
-import { committee, committeeMembership, screen } from "./campus";
-import { mediaVersion, screenRequest, submission } from "./submissions";
-import { auditEvent, reviewDecision, scheduleEntry } from "./workflow";
+import { appRole, appUser, userRole } from "./identity.ts";
+import { committee, committeeMembership, screen } from "./campus.ts";
+import { mediaVersion, screenRequest, submission } from "./submissions.ts";
+import { auditEvent, reviewDecision, scheduleEntry } from "./workflow.ts";
 
 // Navigation helpers only. Integrity is enforced by SQL constraints in the migrations.
 

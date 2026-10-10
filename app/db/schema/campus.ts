@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, pgTable, text, timestamp, unique, uuid, varchar } from "drizzle-orm/pg-core";
-import { MEMBERSHIP_TYPES, sqlList } from "./values";
-import { appUser } from "./identity";
+import { MEMBERSHIP_TYPES, sqlList } from "./values.ts";
+import { appUser } from "./identity.ts";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>

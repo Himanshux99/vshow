@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import pg from "pg";
 import { isLocalHost, resolveDbConfig } from "../app/db/config.server.ts";
+import { createLogger, type LogLevel } from "../app/logging/logger.server.ts";
 
 /**
  * Runs a node script with the real environment plus test defaults: APP_ENV=test (so throwaway
@@ -46,4 +47,26 @@ export async function createThrowawayDb(prefix: string): Promise<ThrowawayDb> {
     result.skipReason = `no local database available (${(err as Error).message.split("\n")[0].slice(0, 80)}); run npm run setup && npm run db:up`;
   }
   return result;
+}
+
+export type LogRecord = Record<string, unknown> & { err?: Record<string, unknown> };
+
+/** A real Vshow logger (real Pino, real redaction) writing JSON lines into memory instead of stdout. */
+export function captureLogs(level: LogLevel = "trace") {
+  const lines: string[] = [];
+  const logger = createLogger({
+    level,
+    destination: {
+      write: (line: string) => {
+        lines.push(line);
+      },
+    },
+  });
+  return {
+    logger,
+    lines,
+    records: () => lines.map((l) => JSON.parse(l) as LogRecord),
+    /** Everything that was written, as one string, for "this secret never appears anywhere" assertions. */
+    text: () => lines.join(""),
+  };
 }

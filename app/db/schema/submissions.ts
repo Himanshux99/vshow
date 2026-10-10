@@ -13,9 +13,9 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
-import { WORKFLOW_STATUSES, sqlList } from "./values";
-import { appUser } from "./identity";
-import { committee, screen } from "./campus";
+import { WORKFLOW_STATUSES, sqlList } from "./values.ts";
+import { appUser } from "./identity.ts";
+import { committee, screen } from "./campus.ts";
 
 // Schema doc §4.7
 export const submission = pgTable(

@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, pgTable, primaryKey, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
-import { ROLE_CODES, sqlList } from "./values";
+import { ROLE_CODES, sqlList } from "./values.ts";
 
 // Schema doc §4.1
 export const appUser = pgTable(

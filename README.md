@@ -127,6 +127,19 @@ Database-backed tests create and drop their own uniquely named database on local
 
 Pull requests never need production credentials and never connect to production databases. Note: `npm audit` also reports moderate advisories in `drizzle-kit`'s dev-only esbuild dependency; they concern a dev server we do not run and are excluded from the production audit.
 
+## Logging and dependency wiring
+
+**Logging** uses [Pino](https://getpino.io) behind a small Vshow-owned interface (`Logger` in [app/logging/logger.server.ts](app/logging/logger.server.ts)); application code never imports Pino. Output is one JSON object per line with an ISO timestamp, level, `service`, and the request's `requestId`. In an interactive dev terminal it is printed in a compact readable form. Configure with `LOG_LEVEL` and `LOG_FORMAT` (see `.env.example`).
+
+- **Redaction is automatic and applied to every field and message** ([sanitize.server.ts](app/logging/sanitize.server.ts)): passwords, tokens, cookies, `authorization`, sessions, signing/API keys, database connection strings, bearer tokens/JWTs, cloud keys, presigned-URL signatures and email addresses are replaced; binary data, request bodies, IP addresses and user agents are omitted. Errors are logged under `err` (type, message, stack, cause chain) and never copy arbitrary properties such as PostgreSQL's row-value `detail`.
+- **Per request** the root middleware logs exactly one line: method, path (no query string), status, duration, `requestId`. A valid incoming `x-request-id` (8-128 chars of `A-Za-z0-9._-`) is reused, otherwise a UUID is generated; it is returned in the `x-request-id` response header. Headers, cookies, queries and bodies are never logged.
+- **Errors**: unhandled loader/action/render errors are logged in `entry.server.tsx` (`handleError`) with the request ID; the browser only ever sees a generic message (stack traces appear in development builds only).
+- Use it from a loader/action via `getRequestScope(context)`: `const { logger, database, requestId } = getRequestScope(context)`.
+
+**Dependency injection** is plain functions and objects, no framework. [app/server/container.server.ts](app/server/container.server.ts) is the single composition root: it reads the environment and builds `AppDeps` (`logger`, `database`). The database is a lazy `DbProvider` (`database.get()` creates the pool on first use; importing a module or building the container never connects). Loaders receive deps through router context; tests build their own `AppDeps` with fakes (see `tests/container.test.ts`). Future providers (storage, auth) are added as properties of `AppDeps`.
+
+Known limitation: `npm start` / the Docker image use `react-router-serve`, whose built-in `morgan("tiny")` access log prints the full URL **including query strings** to stdout. Do not put secrets in query strings (relevant for OAuth callbacks); Vshow's own logs never include them.
+
 ## Troubleshooting and recovery
 
 | Symptom                                             | What to do                                                                                                                                                                                                               |

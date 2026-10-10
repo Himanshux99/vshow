@@ -1,7 +1,13 @@
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 
 import type { Route } from "./+types/root";
+import { getContainer } from "./server/container.server";
+import { createRequestScopeMiddleware } from "./server/request-scope.server";
 import "./app.css";
+
+// Server-only: assigns a request ID, builds the request-scoped logger and exposes dependencies to
+// loaders/actions through router context. React Router strips this export from the client bundle.
+export const middleware: Route.MiddlewareFunction[] = [createRequestScopeMiddleware(getContainer)];
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
