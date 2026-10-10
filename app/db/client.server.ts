@@ -28,6 +28,11 @@ export interface DbProviderOptions {
   logger: Logger;
   /** Test seam: build the pool. Defaults to a small node-postgres pool. */
   createPool?: (config: DbConfig) => PoolLike;
+  /**
+   * Called once, right after the pool is created. The hosting platform adapter uses it for pool lifecycle
+   * handling, e.g. Vercel registers the pool so idle connections are released before suspension (app/platform/).
+   */
+  onPoolCreated?: (pool: PoolLike) => void;
 }
 
 function createDrizzle(pool: PoolLike) {
@@ -47,7 +52,7 @@ function defaultCreatePool(config: DbConfig): PoolLike {
 }
 
 export function createDbProvider(options: DbProviderOptions): DbProvider {
-  const { resolveConfig, logger, createPool = defaultCreatePool } = options;
+  const { resolveConfig, logger, createPool = defaultCreatePool, onPoolCreated } = options;
   let state: { db: Db; pool: PoolLike } | undefined;
 
   return {
@@ -58,6 +63,7 @@ export function createDbProvider(options: DbProviderOptions): DbProvider {
       // Only host/port/database are logged; the connection string never is (and would be scrubbed anyway).
       logger.debug("database pool created", { host: config.host, port: config.port, database: config.database });
       pool.on("error", (err) => logger.error("database idle client error", { err }));
+      onPoolCreated?.(pool);
       state = { db: createDrizzle(pool), pool };
       return state.db;
     },

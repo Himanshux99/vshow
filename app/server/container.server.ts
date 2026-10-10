@@ -1,9 +1,10 @@
-// Composition root: the one place that reads process.env and decides which concrete infrastructure the
-// app uses. Everything else receives `AppDeps` (or a request scope built from it) explicitly, so tests
+// Composition root: the one place that reads process.env and decides which concrete infrastructure (and
+// which hosting platform adapter) the app uses. Everything else receives `AppDeps` (or a request scope built from it) explicitly, so tests
 // can build their own with fakes. Future providers (storage, auth) are added here as plain properties.
 import { resolveDbConfig } from "../db/config.server.ts";
 import { createDbProvider, type DbProvider } from "../db/client.server.ts";
 import { createLogger, resolveLogConfig, type Logger } from "../logging/logger.server.ts";
+import { selectPlatform } from "../platform/platform.server.ts";
 
 export interface AppDeps {
   logger: Logger;
@@ -13,13 +14,20 @@ export interface AppDeps {
 type Env = Record<string, string | undefined>;
 
 /** Wires the real implementations. Cheap: no database connection is opened until `database.get()`. */
-export function createContainer(env: Env = process.env, isTty = Boolean(process.stdout.isTTY)): AppDeps {
+export function createContainer(env: Env = process.env, isTty = Boolean(globalThis.process?.stdout?.isTTY)): AppDeps {
   const logConfig = resolveLogConfig(env, isTty);
   const logger = createLogger({ level: logConfig.level, pretty: logConfig.pretty });
   if (logConfig.invalidLevel) {
     logger.warn("ignoring invalid LOG_LEVEL; using default", { value: logConfig.invalidLevel, level: logConfig.level });
   }
-  const database = createDbProvider({ resolveConfig: () => resolveDbConfig(env, "runtime"), logger });
+  const platform = selectPlatform(env, logger);
+  logger.debug("container created", { platform: platform.name });
+  const database = createDbProvider({
+    resolveConfig: () => resolveDbConfig(env, "runtime"),
+    logger,
+    // Hosting-specific pool lifecycle (Vercel registers it; Node does nothing). See app/platform/.
+    onPoolCreated: platform.onPoolCreated?.bind(platform),
+  });
   return { logger, database };
 }
 

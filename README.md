@@ -164,11 +164,66 @@ Known limitation: `npm start` / the Docker image use `react-router-serve`, whose
 - Never run migrations against a remote database from a pull-request job. Production migrations are a manual, confirmed step.
 - Do not paste connection strings into issues or logs; scripts print only host, port and database name.
 
-## Build and deploy
+## Deployment: Vercel (serverless), decision recorded
+
+Vshow deploys to **Vercel Functions in React Router framework mode**. There is no Express and no custom persistent Node server.
+
+- **Integration:** Vercel's documented zero-config React Router support. The optional `@vercel/react-router` preset is **not installed**: its latest release (1.3.7) declares peer dependencies on React Router **7**, and this project uses **8.4**, so it is an unsupported combination. Adopt it only after Vercel supports React Router 8 or a preview deployment proves it works.
+- **Runtime:** Node 24 (`engines` is `24.x`; also set the Vercel project's Node.js version to 24). Build command: the default `react-router build`. **Migrations never run during build or deploy**; run `db:migrate` deliberately (see above).
+- **Environment variables (Vercel project settings, never in git):** `DB_TARGET=neon`, `DATABASE_URL` (Neon **pooled** string), optionally `LOG_LEVEL`. `DATABASE_URL_DIRECT` is only needed by whoever runs migrations, from a trusted machine, not by the deployed app. Use a separate Neon branch/database for Preview deployments and never the production one.
+- **Database connections:** one `pg` pool per function instance, created lazily on first use and cached for the instance's lifetime (never per request); max 5 connections, 10 s idle timeout, pointed at Neon's pooler. On Vercel the pool is also registered with `attachDatabasePool` (`@vercel/functions`, marked experimental by Vercel), isolated in `app/platform/vercel.server.ts` so idle connections are closed before an instance is suspended. Nothing retries a database write automatically.
+- **Access logs:** `react-router-serve` (and its `morgan` access log that prints query strings) is **not used on Vercel**, which builds its own function entry. Vshow's logs contain paths only. **Unresolved:** Vercel's own runtime-log UI records a request's _search params_ as platform metadata that application code cannot filter (retention: Hobby 1 h, Pro 1 day). An OAuth callback carries `code` and `state` in its query string, so they would appear there. This needs a decision before the auth phase (options: accept, given single-use short-lived codes with PKCE; or use `response_mode=form_post` if vauth supports it, which puts them in a POST body instead).
+- **`npm start` and the Docker image** run `react-router-serve` and are for local smoke tests and non-Vercel self-hosting only. They print full URLs including query strings to stdout.
+
+**What is verified locally:** production build, SSR on the built server, request IDs on matched and unmatched routes, per-request log lines, redaction, pool laziness/reuse (with a fake pool), and the Docker image. **What can only be verified on Vercel** (not yet done): that a preview deployment builds and serves React Router 8 without the preset, that the custom `entry.server.tsx` is used, structured logs appearing in Runtime Logs, real Neon pooled connections under concurrency, `attachDatabasePool` behaviour, and exactly what the Vercel log UI records.
+
+## Portability: Vercel, Cloudflare Workers, Node hosting
+
+The deployment target is Vercel today. The code is organised so moving later is a bounded piece of work, **not a zero-change swap**. `tests/portability.test.ts` enforces the boundaries below.
+
+**Shared and provider-independent** (no hosting-provider or Node-only imports): routes and the root route, Zod validation and the API error convention ([api-response](app/server/api-response.server.ts), [validation](app/server/validation.server.ts)), request IDs and per-request scope, the log-redaction logic, the `Logger` interface, database config/safety checks, Drizzle schema and migrations, the seed and migration scripts (they run from any trusted machine), and the shared server-entry hooks ([entry-hooks.server.ts](app/server/entry-hooks.server.ts)). Business logic must keep receiving `logger`/`database` through `AppDeps` and never import a provider package.
+
+**Runtime- or provider-specific, and the only places that may be:**
+
+| File                                                                                                                                        | Why it is specific                                                         | What changes elsewhere                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| [app/platform/vercel.server.ts](app/platform/vercel.server.ts) + the Vercel branch in [platform.server.ts](app/platform/platform.server.ts) | `@vercel/functions` `attachDatabasePool` (lazy import; failure only warns) | Delete the file/branch and the dependency to leave Vercel                         |
+| [app/db/client.server.ts](app/db/client.server.ts)                                                                                          | `pg` opens TCP connections (Node API)                                      | Replace the driver behind `DbProvider`; schema and migrations are unaffected      |
+| [app/entry.server.tsx](app/entry.server.tsx)                                                                                                | Node stream HTML rendering                                                 | A Cloudflare entry uses Web-stream rendering and re-exports the same shared hooks |
+| [app/logging/logger.server.ts](app/logging/logger.server.ts)                                                                                | Pino and `process.stdout`                                                  | Re-implement `createLogger` (the sanitizer and `Logger` interface stay)           |
+| [app/server/container.server.ts](app/server/container.server.ts)                                                                            | Reads `process.env` once (the composition root)                            | See "environment" under Cloudflare                                                |
+
+**To run on Vercel (current target):** nothing further beyond the deployment section above; Vercel-only unknowns are listed there.
+
+**To move to Cloudflare Workers** (React Router 8 has an official adapter, `@react-router/cloudflare` 8.4.0):
+
+- Add that package and `wrangler`, a Worker entry using `createRequestHandler`, a Cloudflare `entry.server` with Web-stream rendering that re-exports `handleError`/`instrumentations` from the shared hooks, and the Vite/Wrangler config.
+- **Database is the main work.** Node's `pg` over TCP does not suit short-lived isolates. Options: `pg` through Cloudflare Hyperdrive (needs `nodejs_compat`), or Neon's serverless driver with Drizzle's matching adapter. Either replaces the internals of `createDbProvider` and the `Db` type; every `database.get()` caller keeps its API only if the query-builder surface stays the same (the Drizzle adapter differs, so re-test queries and transactions). Migrations still run from a trusted machine with the direct Neon URL.
+- Replace the Pino backend with a console/JSON logger behind the same `Logger` interface (Pino is not designed for Workers; unverified). Drop the Vercel adapter and add a Cloudflare one only if a real lifecycle difference appears.
+- **Environment:** Workers receive configuration as bindings. `createContainer(env)` already accepts an env object, but `getContainer()` caches one container per process, so it needs to be created per isolate/request from the bindings (or use the `nodejs_compat` flag that populates `process.env`; unverified).
+- Check bundle-size and CPU-time limits for the Zod/Drizzle/React bundle (unverified), and what Cloudflare's request logs record about query strings.
+
+**To use conventional Node hosting** (VM, container platform): this already works via `npm start` or the Dockerfile, but note:
+
+- `react-router-serve` prints query strings in its access log, and there is no graceful shutdown that calls `database.close()`. A small production server (Node `http` plus React Router's `createRequestHandler`, no Express needed) would fix both; it is not built because Vercel is the target.
+- No platform adapter is needed (a persistent process keeps its pool). Run one process per container, keep `max` at 5 per instance, and put TLS, request limits and log shipping in the host or reverse proxy.
+- Pin Node 24 and run migrations as a separate, deliberate step, as everywhere.
+
+**Known remaining portability risks:** the Drizzle query surface differs between `pg` and HTTP/WebSocket drivers; Pino on Workers; per-request environment on Workers; the experimental `attachDatabasePool`; and no production-server shutdown handling off Vercel.
+
+## API routes: errors and validation
+
+Page routes use React Router's own mechanisms (thrown responses, `ErrorBoundary`; unhandled errors are logged by `handleError`). **API / resource routes** use one JSON convention ([api-response.server.ts](app/server/api-response.server.ts)): success `{ "data": ... }`; failure `{ "error": { "code", "message", "requestId", "issues"? } }` with the correct HTTP status and the `x-request-id` header. Inside a resource route's native `async` loader/action, wrap the body in `try { ... } catch (e) { return toApiResponse(e, getRequestScope(context)) }`. Unknown errors become a generic 500 (the real error is logged, never returned); validation failures return field paths and codes, never the submitted values.
+
+Request bodies and queries are validated with shared **Zod** schemas at the boundary via `parseJsonBody` / `parseSearchParams` ([validation.server.ts](app/server/validation.server.ts)): content type is checked, the body is size-limited (1 MB, enforced while streaming), and malformed JSON is rejected without echoing it. No retry logic exists in the codebase, by design: a write is only retried with an explicit idempotency key.
+
+Requests that never reach the root middleware (unmatched routes) still get a request ID and one log line: documents in `entry.server.tsx` (the ID is also returned in the `x-request-id` header), `.data` requests and pre-routing failures via React Router's instrumentation API (logged, but that API is read-only so no header is added).
+
+## Build and run locally
 
 ```bash
 npm run build
-npm run start
+npm run start    # react-router-serve: local smoke test only, see the Vercel section
 ```
 
-The included `Dockerfile` builds a self-hosted image (the CI `docker` job verifies it builds, and a test verifies the build context excludes env files and dev data). The intended production target is Vercel, which is not configured yet.
+The included `Dockerfile` builds a self-hosted image (the CI `docker` job verifies it builds, and a test verifies the build context excludes env files and dev data).

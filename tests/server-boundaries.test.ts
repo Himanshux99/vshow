@@ -41,6 +41,21 @@ describe("server-only boundaries (source)", () => {
     assert.deepEqual(offenders, []);
   });
 
+  const stripComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+  it("contains no automatic retry logic (writes must not be retried without an idempotency strategy)", () => {
+    const offenders = appFiles.filter((f) =>
+      /\b(retry|retries|retrying|backoff)\b/i.test(stripComments(readFileSync(f, "utf8"))),
+    );
+    assert.deepEqual(offenders, []);
+  });
+
+  it("the composition root delegates hosting differences to the platform adapter", () => {
+    const src = stripComments(readFileSync("app/server/container.server.ts", "utf8"));
+    assert.match(src, /selectPlatform\(/);
+    assert.ok(!/attachDatabasePool|@vercel/.test(src));
+  });
+
   it("no module-level singleton database exists any more", () => {
     assert.ok(!appFiles.some((f) => /\bgetDb\b/.test(readFileSync(f, "utf8"))));
   });

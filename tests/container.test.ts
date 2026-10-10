@@ -95,6 +95,21 @@ describe("database provider (no real database)", () => {
     assert.ok(!log.text().includes(SECRET));
   });
 
+  it("calls onPoolCreated exactly once, with the pool, when the pool is first created", () => {
+    const seen: PoolLike[] = [];
+    const pool = new FakePool();
+    const provider = createDbProvider({
+      logger: createNoopLogger(),
+      resolveConfig: config,
+      createPool: () => pool,
+      onPoolCreated: (p) => seen.push(p),
+    });
+    assert.equal(seen.length, 0, "not called before first use");
+    provider.get();
+    provider.get();
+    assert.deepEqual(seen, [pool]);
+  });
+
   it("logs only host, port and database when a pool is created", () => {
     const log = captureLogs();
     createDbProvider({ logger: log.logger, resolveConfig: config, createPool: () => new FakePool() }).get();
