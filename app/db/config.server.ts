@@ -27,10 +27,7 @@ export function isLocalHost(host: string): boolean {
   return LOCAL_HOSTS.has(host);
 }
 
-export function resolveDbConfig(
-  env: Record<string, string | undefined>,
-  purpose: DbPurpose,
-): DbConfig {
+export function resolveDbConfig(env: Record<string, string | undefined>, purpose: DbPurpose): DbConfig {
   const rawTarget = env.DB_TARGET?.trim() || undefined;
   if (rawTarget !== undefined && rawTarget !== "local" && rawTarget !== "neon") {
     throw new DbConfigError("DB_TARGET must be 'local' or 'neon'.");

@@ -5,7 +5,10 @@ import { appUser } from "./identity";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
-  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date());
+  timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date());
 
 // Schema doc §4.4
 export const committee = pgTable("committee", {
@@ -23,8 +26,12 @@ export const committeeMembership = pgTable(
   "committee_membership",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    committeeId: uuid("committee_id").notNull().references(() => committee.id),
-    userId: uuid("user_id").notNull().references(() => appUser.id),
+    committeeId: uuid("committee_id")
+      .notNull()
+      .references(() => committee.id),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => appUser.id),
     membershipType: text("membership_type").notNull(),
     isActive: boolean("is_active").notNull().default(true),
     assignedByUserId: uuid("assigned_by_user_id").references(() => appUser.id),

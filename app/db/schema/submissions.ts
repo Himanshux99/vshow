@@ -1,7 +1,17 @@
 import { sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
-  bigint, check, foreignKey, index, integer, pgTable, text, timestamp, unique, uuid, varchar,
+  bigint,
+  check,
+  foreignKey,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+  varchar,
 } from "drizzle-orm/pg-core";
 import { WORKFLOW_STATUSES, sqlList } from "./values";
 import { appUser } from "./identity";
@@ -13,8 +23,12 @@ export const submission = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     referenceCode: varchar("reference_code", { length: 40 }).notNull().unique(),
-    committeeId: uuid("committee_id").notNull().references(() => committee.id),
-    createdByUserId: uuid("created_by_user_id").notNull().references(() => appUser.id),
+    committeeId: uuid("committee_id")
+      .notNull()
+      .references(() => committee.id),
+    createdByUserId: uuid("created_by_user_id")
+      .notNull()
+      .references(() => appUser.id),
     title: varchar("title", { length: 200 }).notNull(),
     description: text("description"),
     workflowStatus: text("workflow_status").notNull(),
@@ -22,7 +36,10 @@ export const submission = pgTable(
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     closedAt: timestamp("closed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
   (t) => [
     check("submission_workflow_status_valid", sql.raw(`"workflow_status" IN (${sqlList(WORKFLOW_STATUSES)})`)),
@@ -45,14 +62,18 @@ export const mediaVersion = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     // Annotated to break the submission <-> media_version type cycle (current_version_id).
-    submissionId: uuid("submission_id").notNull().references((): AnyPgColumn => submission.id),
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references((): AnyPgColumn => submission.id),
     versionNumber: integer("version_number").notNull(),
     objectKey: varchar("object_key", { length: 1024 }).notNull().unique(),
     originalFilename: varchar("original_filename", { length: 255 }).notNull(),
     contentType: varchar("content_type", { length: 150 }).notNull(),
     sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
     checksumSha256: varchar("checksum_sha256", { length: 64 }),
-    uploadedByUserId: uuid("uploaded_by_user_id").notNull().references(() => appUser.id),
+    uploadedByUserId: uuid("uploaded_by_user_id")
+      .notNull()
+      .references(() => appUser.id),
     uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
     changeNote: text("change_note"),
   },
@@ -72,14 +93,21 @@ export const screenRequest = pgTable(
   "screen_request",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    submissionId: uuid("submission_id").notNull().references(() => submission.id),
-    screenId: uuid("screen_id").notNull().references(() => screen.id),
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references(() => submission.id),
+    screenId: uuid("screen_id")
+      .notNull()
+      .references(() => screen.id),
     slotNumber: integer("slot_number").notNull().default(1),
     preferredStartAt: timestamp("preferred_start_at", { withTimezone: true }),
     preferredEndAt: timestamp("preferred_end_at", { withTimezone: true }),
     requestNote: text("request_note"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
   (t) => [
     unique("screen_request_submission_screen_slot_unique").on(t.submissionId, t.screenId, t.slotNumber),

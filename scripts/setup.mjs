@@ -4,8 +4,17 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import {
-  ENV_FILE, EXAMPLE_FILE, MIN_NODE, describeUrl, isPlaceholder, nodeVersionOk,
-  parseEnv, readEnvFile, run, setEnvValue, writeEnvFile,
+  ENV_FILE,
+  EXAMPLE_FILE,
+  MIN_NODE,
+  describeUrl,
+  isPlaceholder,
+  nodeVersionOk,
+  parseEnv,
+  readEnvFile,
+  run,
+  setEnvValue,
+  writeEnvFile,
 } from "./lib/env.mjs";
 
 const args = process.argv.slice(2);
@@ -48,7 +57,9 @@ if (target === "local") {
       "Docker Compose v2 not found. Install Docker Desktop (Windows/macOS) or Docker Engine + compose plugin (Linux), or use --db=neon.",
     );
   } else if (run("docker", ["info"]).status !== 0) {
-    errors.push("Docker is installed but the daemon is not running. Start Docker Desktop / the docker service and re-run.");
+    errors.push(
+      "Docker is installed but the daemon is not running. Start Docker Desktop / the docker service and re-run.",
+    );
   }
 }
 if (errors.length) {
@@ -69,6 +80,10 @@ if (env().DB_TARGET !== target) {
   text = setEnvValue(text, "DB_TARGET", target);
   changed.push("DB_TARGET");
 }
+if (isPlaceholder(env().APP_ENV)) {
+  text = setEnvValue(text, "APP_ENV", "development");
+  changed.push("APP_ENV");
+}
 fill("BETTER_AUTH_SECRET", () => randomBytes(32).toString("base64"));
 if (env().BETTER_AUTH_SECRET.length < 32) {
   notes.push("BETTER_AUTH_SECRET is shorter than 32 characters; replace it with a stronger value.");
@@ -85,7 +100,9 @@ if (target === "local") {
   });
   const d = describeUrl(env().DATABASE_URL);
   if (!d || !["127.0.0.1", "localhost"].includes(d.host)) {
-    notes.push("DB_TARGET=local but DATABASE_URL does not point at 127.0.0.1/localhost. Fix it before using the database.");
+    notes.push(
+      "DB_TARGET=local but DATABASE_URL does not point at 127.0.0.1/localhost. Fix it before using the database.",
+    );
   }
 } else {
   const d = describeUrl(env().DATABASE_URL ?? "");
@@ -108,7 +125,11 @@ if (check) {
 
 if (created || changed.length) writeEnvFile(text);
 console.log(`✔ Node ${process.versions.node} OK; database target: ${target}`);
-console.log(created ? `✔ Created ${ENV_FILE} from ${EXAMPLE_FILE}` : `✔ ${ENV_FILE} exists (existing values preserved)`);
+console.log(
+  created ? `✔ Created ${ENV_FILE} from ${EXAMPLE_FILE}` : `✔ ${ENV_FILE} exists (existing values preserved)`,
+);
 console.log(changed.length ? `✔ Set: ${changed.join(", ")} (values not shown)` : "✔ Nothing to change");
 notes.forEach((n) => console.log(`! ${n}`));
-console.log(target === "local" ? "Next: npm install && npm run db:up && npm run dev" : "Next: npm install && npm run dev");
+console.log(
+  target === "local" ? "Next: npm install && npm run db:up && npm run dev" : "Next: npm install && npm run dev",
+);

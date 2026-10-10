@@ -27,8 +27,14 @@ describe("resolveDbConfig", () => {
 
   it("rejects malformed and non-postgres URLs without echoing them", () => {
     throwsConfig(() => resolveDbConfig({ DATABASE_URL: "not a url s3cretpw" }, "runtime"), /not a valid URL/);
-    throwsConfig(() => resolveDbConfig({ DATABASE_URL: "mysql://u:s3cretpw@h/db" }, "runtime"), /must start with postgresql/);
-    throwsConfig(() => resolveDbConfig({ DATABASE_URL: "postgresql://u:s3cretpw@127.0.0.1:5432/" }, "runtime"), /no database name/);
+    throwsConfig(
+      () => resolveDbConfig({ DATABASE_URL: "mysql://u:s3cretpw@h/db" }, "runtime"),
+      /must start with postgresql/,
+    );
+    throwsConfig(
+      () => resolveDbConfig({ DATABASE_URL: "postgresql://u:s3cretpw@127.0.0.1:5432/" }, "runtime"),
+      /no database name/,
+    );
   });
 
   it("rejects an invalid DB_TARGET", () => {
@@ -41,24 +47,38 @@ describe("resolveDbConfig", () => {
   });
 
   it("refuses target/host mismatches", () => {
-    throwsConfig(() => resolveDbConfig({ DB_TARGET: "local", DATABASE_URL: NEON_DIRECT }, "runtime"), /not a loopback host/);
-    throwsConfig(() => resolveDbConfig({ DB_TARGET: "neon", DATABASE_URL: LOCAL }, "runtime"), /not a \*\.neon\.tech host/);
     throwsConfig(
-      () => resolveDbConfig({ DB_TARGET: "neon", DATABASE_URL: "postgresql://u:s3cretpw@db.example.com/x?sslmode=require" }, "runtime"),
+      () => resolveDbConfig({ DB_TARGET: "local", DATABASE_URL: NEON_DIRECT }, "runtime"),
+      /not a loopback host/,
+    );
+    throwsConfig(
+      () => resolveDbConfig({ DB_TARGET: "neon", DATABASE_URL: LOCAL }, "runtime"),
+      /not a \*\.neon\.tech host/,
+    );
+    throwsConfig(
+      () =>
+        resolveDbConfig(
+          { DB_TARGET: "neon", DATABASE_URL: "postgresql://u:s3cretpw@db.example.com/x?sslmode=require" },
+          "runtime",
+        ),
       /not a \*\.neon\.tech host/,
     );
   });
 
   it("requires TLS for Neon", () => {
     throwsConfig(
-      () => resolveDbConfig({ DB_TARGET: "neon", DATABASE_URL: NEON_DIRECT.replace("?sslmode=require", "") }, "runtime"),
+      () =>
+        resolveDbConfig({ DB_TARGET: "neon", DATABASE_URL: NEON_DIRECT.replace("?sslmode=require", "") }, "runtime"),
       /sslmode=require/,
     );
   });
 
   it("allows the pooled URL at runtime but never for migrations", () => {
     assert.equal(resolveDbConfig({ DB_TARGET: "neon", DATABASE_URL: NEON_POOLED }, "runtime").isPooler, true);
-    throwsConfig(() => resolveDbConfig({ DB_TARGET: "neon", DATABASE_URL: NEON_POOLED }, "migration"), /direct \(non-pooled\)/);
+    throwsConfig(
+      () => resolveDbConfig({ DB_TARGET: "neon", DATABASE_URL: NEON_POOLED }, "migration"),
+      /direct \(non-pooled\)/,
+    );
   });
 
   it("uses DATABASE_URL_DIRECT for migrations only", () => {

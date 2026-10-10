@@ -13,7 +13,10 @@ export const appUser = pgTable(
     vauthSubject: varchar("vauth_subject", { length: 255 }).unique(),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
   (t) => [check("app_user_email_normalized", sql`${t.email} = lower(btrim(${t.email}))`)],
 );
@@ -28,15 +31,19 @@ export const appRole = pgTable(
     description: text("description"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check("app_role_code_valid", sql.raw(`"code" IN (${sqlList(ROLE_CODES)})`))],
+  () => [check("app_role_code_valid", sql.raw(`"code" IN (${sqlList(ROLE_CODES)})`))],
 );
 
 // Schema doc §4.3
 export const userRole = pgTable(
   "user_role",
   {
-    userId: uuid("user_id").notNull().references(() => appUser.id),
-    roleId: uuid("role_id").notNull().references(() => appRole.id),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => appUser.id),
+    roleId: uuid("role_id")
+      .notNull()
+      .references(() => appRole.id),
     assignedByUserId: uuid("assigned_by_user_id").references((): AnyPgColumn => appUser.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

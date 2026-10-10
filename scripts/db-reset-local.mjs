@@ -23,7 +23,8 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL !== env.DATABASE_URL) {
 const d = describeUrl(env.DATABASE_URL ?? "");
 if (!d) refuse("DATABASE_URL is missing or unparsable.");
 if (!LOCAL_HOSTS.has(d.host)) refuse(`database host '${d.host}' is not local.`);
-if (d.port !== String(env.POSTGRES_PORT || 5432)) refuse("DATABASE_URL port does not match POSTGRES_PORT (not the compose database).");
+if (d.port !== String(env.POSTGRES_PORT || 5432))
+  refuse("DATABASE_URL port does not match POSTGRES_PORT (not the compose database).");
 if (d.db !== (env.POSTGRES_DB || "vshow")) refuse("DATABASE_URL database does not match POSTGRES_DB.");
 
 let answer = process.argv.find((a) => a.startsWith("--confirm="))?.slice(10);

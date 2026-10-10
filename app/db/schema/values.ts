@@ -12,13 +12,7 @@ export const WORKFLOW_STATUSES = [
   "CANCELLED",
 ] as const;
 export const REVIEW_DECISIONS = ["APPROVED", "REJECTED", "CHANGES_REQUESTED"] as const;
-export const SCHEDULE_STATUSES = [
-  "NOT_SCHEDULED",
-  "SCHEDULED",
-  "PLAYING_CONFIRMED",
-  "COMPLETED",
-  "CANCELLED",
-] as const;
+export const SCHEDULE_STATUSES = ["NOT_SCHEDULED", "SCHEDULED", "PLAYING_CONFIRMED", "COMPLETED", "CANCELLED"] as const;
 
 export type RoleCode = (typeof ROLE_CODES)[number];
 export type MembershipType = (typeof MEMBERSHIP_TYPES)[number];

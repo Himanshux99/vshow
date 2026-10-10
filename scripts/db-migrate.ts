@@ -7,7 +7,12 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { DbConfigError, resolveDbConfig } from "../app/db/config.server.ts";
 import {
-  MIGRATIONS_DIR, connect, describeError, fail, readLocalMigrations, readMigrationState,
+  MIGRATIONS_DIR,
+  connect,
+  describeError,
+  fail,
+  readLocalMigrations,
+  readMigrationState,
 } from "./lib/db-runtime.ts";
 
 const args = process.argv.slice(2);
@@ -37,7 +42,8 @@ if (!config.isLocal && !dryRun && confirmHost !== config.host) {
 }
 
 const local = readLocalMigrations();
-if (local.length === 0) fail(`No migrations found in ./${MIGRATIONS_DIR}. Run \`npm run db:generate\` and commit the result.`);
+if (local.length === 0)
+  fail(`No migrations found in ./${MIGRATIONS_DIR}. Run \`npm run db:generate\` and commit the result.`);
 
 console.log(`Target: ${config.target} → ${config.host}:${config.port}/${config.database}`);
 const client = await connect(config);
@@ -69,7 +75,9 @@ try {
     } else {
       await migrate(drizzle({ client }), { migrationsFolder: MIGRATIONS_DIR });
       const after = await readMigrationState(client, local);
-      console.log(`✔ Applied ${before.pending.length} migration(s); ${after.applied} total, ${after.pending.length} pending.`);
+      console.log(
+        `✔ Applied ${before.pending.length} migration(s); ${after.applied} total, ${after.pending.length} pending.`,
+      );
     }
   }
 } catch (err) {

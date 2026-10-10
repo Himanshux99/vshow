@@ -22,14 +22,18 @@ try {
   const local = readLocalMigrations();
   const state = await readMigrationState(client, local);
 
-  console.log(`✔ Connected to ${config.host}:${config.port}/${info.rows[0].db} (PostgreSQL ${info.rows[0].version}, ${purpose} connection)`);
+  console.log(
+    `✔ Connected to ${config.host}:${config.port}/${info.rows[0].db} (PostgreSQL ${info.rows[0].version}, ${purpose} connection)`,
+  );
   console.log(
     state.tableExists
       ? `✔ Migrations: ${state.applied} applied, ${state.pending.length} pending (of ${local.length} committed)`
       : `! No migration history yet: ${local.length} pending. Run \`npm run db:migrate\` explicitly.`,
   );
   if (state.unknownApplied.length) {
-    console.log(`✖ ${state.unknownApplied.length} applied migration(s) do not match committed files (history mismatch).`);
+    console.log(
+      `✖ ${state.unknownApplied.length} applied migration(s) do not match committed files (history mismatch).`,
+    );
     process.exitCode = 1;
   }
 } catch (err) {

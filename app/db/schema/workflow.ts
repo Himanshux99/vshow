@@ -10,9 +10,13 @@ export const reviewDecision = pgTable(
   "review_decision",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    submissionId: uuid("submission_id").notNull().references(() => submission.id),
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references(() => submission.id),
     mediaVersionId: uuid("media_version_id").notNull(),
-    reviewerUserId: uuid("reviewer_user_id").notNull().references(() => appUser.id),
+    reviewerUserId: uuid("reviewer_user_id")
+      .notNull()
+      .references(() => appUser.id),
     decision: text("decision").notNull(),
     comment: text("comment"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -39,18 +43,29 @@ export const scheduleEntry = pgTable(
   "schedule_entry",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    submissionId: uuid("submission_id").notNull().references(() => submission.id),
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references(() => submission.id),
     mediaVersionId: uuid("media_version_id").notNull(),
-    screenId: uuid("screen_id").notNull().references(() => screen.id),
+    screenId: uuid("screen_id")
+      .notNull()
+      .references(() => screen.id),
     status: text("status").notNull(),
     actualStartAt: timestamp("actual_start_at", { withTimezone: true }),
     actualEndAt: timestamp("actual_end_at", { withTimezone: true }),
     externalScheduleRef: varchar("external_schedule_ref", { length: 255 }),
     managerNote: text("manager_note"),
-    createdByUserId: uuid("created_by_user_id").notNull().references(() => appUser.id),
-    updatedByUserId: uuid("updated_by_user_id").notNull().references(() => appUser.id),
+    createdByUserId: uuid("created_by_user_id")
+      .notNull()
+      .references(() => appUser.id),
+    updatedByUserId: uuid("updated_by_user_id")
+      .notNull()
+      .references(() => appUser.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
   (t) => [
     foreignKey({

@@ -10,6 +10,10 @@
     "dev": "react-router dev",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
     "setup": "node scripts/setup.mjs",
     "setup:check": "node scripts/setup.mjs --check",
     "db:up": "docker compose up -d --wait postgres",
@@ -18,6 +22,7 @@
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "db:migrate": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/db-migrate.ts",
+    "db:seed": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/db-seed.ts",
     "db:health": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/db-health.ts",
     "test": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning --test \"tests/**/*.test.ts\""
   },
@@ -32,6 +37,7 @@
     "react-router": "^8.4.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@react-router/dev": "^8.4.0",
     "@tailwindcss/vite": "^4.2.2",
     "@types/node": "^22",
@@ -39,8 +45,11 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "drizzle-kit": "^0.31.11",
+    "eslint": "^10.12.0",
+    "prettier": "^3.9.10",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.1",
     "vite": "^8.0.3"
   }
 }
