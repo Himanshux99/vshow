@@ -1,0 +1,24 @@
+# Local development PostgreSQL only. Reads POSTGRES_* from .env (see .env.example).
+name: vshow
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vshow}
+      POSTGRES_DB: ${POSTGRES_DB:-vshow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set - run npm run setup first}
+    ports:
+      # Loopback only: never reachable from other machines on the network.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - vshow_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  vshow_pgdata:

@@ -2,3 +2,11 @@
 build
 node_modules
 README.md
+.git
+.env
+.env.*
+!.env.example
+docs
+.agents
+scripts
+docker-compose.yml
