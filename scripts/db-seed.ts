@@ -6,6 +6,7 @@
 import type pg from "pg";
 import { redact } from "../app/db/config.server.ts";
 import { connect, describeError, fail, readLocalMigrations, readMigrationState } from "./lib/db-runtime.ts";
+import { loadDotenv } from "./lib/local-target.ts";
 import { SeedGuardError, assertSeedAllowed } from "./lib/seed-guard.ts";
 import { ROLES, buildFixtures, seedId } from "./seed/fixtures.ts";
 
@@ -15,7 +16,7 @@ const confirm = args.find((a) => a.startsWith("--confirm="))?.slice("--confirm="
 
 let config;
 try {
-  config = assertSeedAllowed(process.env);
+  config = assertSeedAllowed(process.env, loadDotenv());
 } catch (err) {
   if (err instanceof SeedGuardError) fail(`Seeding refused: ${err.message}`);
   throw err;

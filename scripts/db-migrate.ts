@@ -14,6 +14,7 @@ import {
   readLocalMigrations,
   readMigrationState,
 } from "./lib/db-runtime.ts";
+import { TargetGuardError, assertLocalComposeTarget, loadDotenv } from "./lib/local-target.ts";
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
@@ -29,6 +30,17 @@ try {
 } catch (err) {
   if (err instanceof DbConfigError) fail(err.message);
   throw err;
+}
+
+// A "local" target must be provably the local Compose database (not just any loopback address, which
+// could be a tunnel to a remote one). Remote targets keep the explicit --confirm-host requirement below.
+if (config.target === "local") {
+  try {
+    assertLocalComposeTarget(process.env, { dotenv: loadDotenv() });
+  } catch (err) {
+    if (err instanceof TargetGuardError) fail(`Migration refused: ${err.message}`);
+    throw err;
+  }
 }
 
 if (process.env.NODE_ENV === "production" && config.isLocal === false && !confirmHost) {

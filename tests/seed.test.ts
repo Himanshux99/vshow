@@ -5,7 +5,7 @@ import { SeedGuardError, assertSeedAllowed } from "../scripts/lib/seed-guard.ts"
 import { SEED_EMAIL_DOMAIN, SEED_REF_PREFIX, buildFixtures } from "../scripts/seed/fixtures.ts";
 import { createThrowawayDb, runNode } from "./helpers.ts";
 
-const LOCAL = "postgresql://vshow:s3cretpw@127.0.0.1:5432/vshow_dev";
+const LOCAL = "postgresql://vshow:s3cretpw@127.0.0.1:5432/vshow";
 const NEON = "postgresql://u:s3cretpw@ep-x-1.eu.aws.neon.tech/neondb?sslmode=require";
 const ok = { APP_ENV: "development", DB_TARGET: "local", DATABASE_URL: LOCAL };
 
@@ -23,7 +23,7 @@ const refused = (env: Record<string, string | undefined>, pattern: RegExp) =>
 describe("seed guard (fail closed)", () => {
   it("allows development and test against a local database", () => {
     assert.equal(assertSeedAllowed(ok).host, "127.0.0.1");
-    assert.equal(assertSeedAllowed({ ...ok, APP_ENV: "test" }).database, "vshow_dev");
+    assert.equal(assertSeedAllowed({ ...ok, APP_ENV: "test" }).database, "vshow");
   });
 
   it("rejects unset, production, preview and unknown environments", () => {
@@ -43,15 +43,15 @@ describe("seed guard (fail closed)", () => {
   it("rejects remote, unknown and ambiguous database targets", () => {
     refused(
       { ...ok, DB_TARGET: "neon", DATABASE_URL: NEON },
-      /(not the local database|Seeding remote|not a loopback host)/,
+      /(not 'local'|not the local database|not a loopback host)/,
     );
-    refused({ ...ok, DB_TARGET: undefined }, /DB_TARGET is not set/);
-    refused({ ...ok, DB_TARGET: "prod" }, /DB_TARGET must be/);
+    refused({ ...ok, DB_TARGET: undefined }, /DB_TARGET is 'unset'/);
+    refused({ ...ok, DB_TARGET: "prod" }, /not 'local'/);
     refused({ ...ok, DATABASE_URL: NEON }, /not a loopback host/);
     refused({ ...ok, DATABASE_URL: undefined }, /DATABASE_URL is not set/);
     // runtime URL remote while the direct URL is local
-    refused({ ...ok, DATABASE_URL: NEON, DATABASE_URL_DIRECT: LOCAL }, /not a loopback host/);
-    refused({ ...ok, DATABASE_URL: LOCAL.replace("vshow_dev", "vshow_production") }, /looks like production/);
+    refused({ ...ok, DATABASE_URL: NEON, DATABASE_URL_DIRECT: LOCAL }, /different databases/);
+    refused({ ...ok, DATABASE_URL: LOCAL.replace(/vshow$/, "vshow_production") }, /not the expected local database/);
   });
 });
 
@@ -123,7 +123,7 @@ describe("seed fixtures integrity (no database)", () => {
 });
 
 describe("seeding a disposable local database", async () => {
-  const db = await createThrowawayDb("vshow_seedtest");
+  const db = await createThrowawayDb("vshow_test_seed");
   const opts = { skip: db.skipReason || false };
   const env = (extra: Record<string, string> = {}) => ({
     APP_ENV: "test",

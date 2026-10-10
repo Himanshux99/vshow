@@ -3,7 +3,9 @@ import { spawnSync } from "node:child_process";
 
 export const ENV_FILE = ".env";
 export const EXAMPLE_FILE = ".env.example";
-export const MIN_NODE = [22, 22, 0];
+// Single supported Node major. Keep in sync with .nvmrc, package.json engines and the Dockerfile
+// (tests/toolchain.test.ts enforces this).
+export const REQUIRED_NODE_MAJOR = 24;
 
 export function isPlaceholder(value) {
   return value === undefined || value === "" || /^change-?me/i.test(value);
@@ -37,12 +39,16 @@ export function writeEnvFile(text, path = ENV_FILE) {
 }
 
 export function nodeVersionOk(version = process.versions.node) {
-  const cur = version.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    if (cur[i] > MIN_NODE[i]) return true;
-    if (cur[i] < MIN_NODE[i]) return false;
+  return Number(version.split(".")[0]) === REQUIRED_NODE_MAJOR;
+}
+
+/** npm version pinned by package.json's packageManager field (e.g. "npm@11.8.0"), or undefined. */
+export function pinnedNpmVersion(pkgPath = "package.json") {
+  try {
+    return JSON.parse(readFileSync(pkgPath, "utf8")).packageManager?.match(/^npm@(\d+\.\d+\.\d+)$/)?.[1];
+  } catch {
+    return undefined;
   }
-  return true;
 }
 
 export function run(cmd, args) {

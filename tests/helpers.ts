@@ -3,10 +3,15 @@ import { randomBytes } from "node:crypto";
 import pg from "pg";
 import { isLocalHost, resolveDbConfig } from "../app/db/config.server.ts";
 
+/**
+ * Runs a node script with the real environment plus test defaults: APP_ENV=test (so throwaway
+ * `vshow_test_*` databases are permitted) and VSHOW_ENV_FILE='' (ignore the developer's .env when the
+ * guard looks for shell-vs-.env conflicts). Individual tests override these to exercise refusals.
+ */
 export function runNode(args: string[], env?: Record<string, string>) {
   return spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", ...args], {
     encoding: "utf8",
-    env: { ...process.env, ...env },
+    env: { ...process.env, APP_ENV: "test", VSHOW_ENV_FILE: "", ...env },
   });
 }
 

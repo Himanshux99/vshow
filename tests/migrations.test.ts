@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,16 +7,10 @@ import { describe, it } from "node:test";
 import pg from "pg";
 import { isLocalHost, resolveDbConfig } from "../app/db/config.server.ts";
 import { readLocalMigrations } from "../scripts/lib/db-runtime.ts";
+import { runNode } from "./helpers.ts";
 
 const kit = join("node_modules", "drizzle-kit", "bin.cjs");
 const kitArgs = ["--dialect=postgresql", "--schema=./app/db/schema/index.ts"];
-
-function runNode(args: string[], env?: Record<string, string>) {
-  return spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", ...args], {
-    encoding: "utf8",
-    env: { ...process.env, ...env },
-  });
-}
 
 describe("migration files", () => {
   it("match the TypeScript schema (no un-generated drift)", () => {

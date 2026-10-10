@@ -33,6 +33,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      - name: Pin npm to the version in package.json
+        run: |
+          npm install -g "npm@$(node -p "require('./package.json').packageManager.split('@')[1]")"
+          npm --version
       - run: npm ci
       - run: npm run format:check
       - run: npm run lint
@@ -66,6 +70,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      - name: Pin npm to the version in package.json
+        run: |
+          npm install -g "npm@$(node -p "require('./package.json').packageManager.split('@')[1]")"
+          npm --version
       - run: npm ci
       - name: Migration files match the schema
         run: npm run db:check
@@ -83,8 +91,8 @@ jobs:
             echo "Second seed run created rows: seeding is not idempotent" >&2
             exit 1
           fi
-      - name: Unit and integration tests (includes unsafe-target and Docker-context tests)
-        run: npm test
+      - name: Unit and integration tests (any skipped test fails the job)
+        run: npm run test:ci
 
   docker:
     name: Docker image builds
@@ -109,6 +117,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      - name: Pin npm to the version in package.json
+        run: |
+          npm install -g "npm@$(node -p "require('./package.json').packageManager.split('@')[1]")"
+          npm --version
       - run: npm ci --ignore-scripts
       - name: Audit production dependencies (fails on high or critical)
         run: npm audit --omit=dev --audit-level=high

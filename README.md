@@ -8,7 +8,7 @@ Each step is a separate, explicit command. Nothing migrates or seeds automatical
 
 ```bash
 git clone <repo-url> && cd vshow
-nvm use                 # or fnm use / install Node >= 22.22 (see .nvmrc)
+nvm use                 # or fnm use / install Node 24.x (see .nvmrc)
 npm ci                  # install exactly what package-lock.json specifies
 npm run setup           # create .env, generate secrets, validate tools (safe to re-run)
 npm run db:up           # start local PostgreSQL in Docker (127.0.0.1 only)
@@ -23,7 +23,7 @@ Check the database any time with `npm run db:health`.
 
 | Tool                                               | Needed for                              |
 | -------------------------------------------------- | --------------------------------------- |
-| Node.js >= 22.22 and npm                           | everything                              |
+| Node.js 24.x and npm 11.8.0 (`packageManager`)     | everything                              |
 | Docker with Compose v2 (Docker Desktop on Win/Mac) | local PostgreSQL (not needed with Neon) |
 | Git                                                | cloning                                 |
 
@@ -76,40 +76,52 @@ Schema source: [app/db/schema/](app/db/schema/) (mirrors [docs/Vshow_Database_Sc
 | `npm run db:migrate -- --dry-run` | Show what would be applied; change nothing                                                              |
 | `npm run db:health`               | Connect, run read-only queries, report applied/pending migrations (`-- --direct` for the migration URL) |
 
-`db:migrate` safety rules: `DB_TARGET` must be set; `local` must be a loopback host and `neon` a `*.neon.tech` host; non-local targets also need `--confirm-host=<exact host>`; pooled Neon URLs are refused; migrations with `DROP TABLE/COLUMN/SCHEMA`, `TRUNCATE` or `DELETE FROM` need `--allow-destructive`; a modified or missing already-applied migration aborts; a lock prevents concurrent runs. There is no `drizzle-kit push`/`studio` script and `drizzle.config.ts` holds no credentials.
+`db:migrate` safety rules: `DB_TARGET` must be set; a `neon` target must be a `*.neon.tech` host; a `local` target must pass the **shared local-target guard** (below); non-local targets also need `--confirm-host=<exact host>`; pooled Neon URLs are refused; migrations with `DROP TABLE/COLUMN/SCHEMA`, `TRUNCATE` or `DELETE FROM` need `--allow-destructive`; a modified or missing already-applied migration aborts; a lock prevents concurrent runs. There is no `drizzle-kit push`/`studio` script and `drizzle.config.ts` holds no credentials.
 
 **Per environment** (migrate each database independently and deliberately, never on deploy):
 
 - **Development:** `npm run db:up && npm run db:migrate`.
-- **Test:** `npm test` migrates a throwaway database on local Postgres; CI uses a service container.
+- **Test:** `npm run test:ci` migrates a throwaway database on local Postgres; CI uses a service container.
 - **Preview:** a Neon branch per preview (never the production branch); migrate with its direct URL first.
 - **Production:** take a Neon restore point, run `db:migrate -- --dry-run`, review, then `db:migrate -- --confirm-host=<host>` with the production **direct** URL provided through the shell environment, not a file. Fix problems by rolling forward with a new migration.
+
+### Local-target guard (migrate, seed, reset)
+
+A loopback address alone is **not** trusted: an SSH tunnel or port-forward to a real database also looks like `127.0.0.1`. Every command that writes to a local database (`db:migrate` on a local target, `db:seed`, `db:reset:local`) uses one shared guard, [scripts/lib/local-target.ts](scripts/lib/local-target.ts), which requires all of:
+
+- `DB_TARGET=local`, and `APP_ENV` unset or `development`/`test` (seeding requires it to be set); no `NODE_ENV=production` or Vercel markers.
+- Host exactly `127.0.0.1` or `localhost`; port equal to `POSTGRES_PORT` (default 5432); user equal to `POSTGRES_USER`; database equal to `POSTGRES_DB` (default `vshow`). Under `APP_ENV=test` only, throwaway `vshow_test_*` databases are also allowed.
+- Production-like names (`prod`, `live`, `staging`, `preview`) are refused even if `POSTGRES_DB` is set to match.
+- `DATABASE_URL` and `DATABASE_URL_DIRECT`, if both set, must describe the same database, and a shell variable must not silently override a different value in `.env`.
+
+Anything it cannot classify is refused. Remote (Neon) migrations are unchanged: they need `--confirm-host=<exact host>`; there is no remote seed or reset. Residual risk: a tunnel deliberately opened on the Compose port with the same database name would look local; do not do that.
 
 ### Seed data (development only)
 
 `npm run db:seed` inserts synthetic fixtures: 7 submissions across 2 committees (draft, pending, approved awaiting handoff, rejected, revised after feedback, replaced after approval, scheduled) and 8 users covering role and membership boundaries. All fixtures are marked `[SEED]` / `SEED-*` / `@seed.vshow.invalid`; media object keys (`seed/...`) do not exist in object storage.
 
-It is idempotent (insert-if-missing, never updates), runs in one transaction, and requires `APP_ENV=development|test`, `DB_TARGET=local`, a loopback database and a fully migrated schema. It refuses production/Vercel markers; remote seeding is not supported. To remove only the fixture rows (by exact id; roles are kept): `npm run db:seed -- --remove --confirm=<database name>`. Because existing rows are never updated, fixture changes only reach a database after `--remove` and a fresh seed.
+It is idempotent (insert-if-missing, never updates), runs in one transaction, and requires `APP_ENV=development|test`, `DB_TARGET=local`, the local Compose database (shared guard below) and a fully migrated schema. It refuses production/Vercel markers; remote seeding is not supported. To remove only the fixture rows (by exact id; roles are kept): `npm run db:seed -- --remove --confirm=<database name>`. Because existing rows are never updated, fixture changes only reach a database after `--remove` and a fresh seed.
 
 ## Quality checks
 
-| Command                                   | Checks                                                          |
-| ----------------------------------------- | --------------------------------------------------------------- |
-| `npm run check`                           | format + lint + typecheck + tests (run this before pushing)     |
-| `npm run format` / `npm run format:check` | Prettier (write / verify)                                       |
-| `npm run lint`                            | ESLint (typescript-eslint)                                      |
-| `npm run typecheck`                       | `react-router typegen && tsc`                                   |
-| `npm test`                                | Node test runner: config, migration drift, seed, Docker context |
-| `npm run build`                           | Production build                                                |
+| Command                                   | Checks                                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `npm run check`                           | format + lint + typecheck + tests (run this before pushing)                                      |
+| `npm run format` / `npm run format:check` | Prettier (write / verify)                                                                        |
+| `npm run lint`                            | ESLint (typescript-eslint)                                                                       |
+| `npm run typecheck`                       | `react-router typegen && tsc`                                                                    |
+| `npm test`                                | Test runner (`scripts/run-tests.mjs`); skipped tests are reported loudly but do not fail locally |
+| `npm run test:ci`                         | Same, but **any skipped or todo test fails the run** (used by CI)                                |
+| `npm run build`                           | Production build                                                                                 |
 
-Database-backed tests create and drop their own uniquely named database on local Postgres. If it is not running they are **skipped, not passed**, so run `npm run db:up` first. The Docker-context test is skipped when Docker is unavailable.
+Database-backed tests create and drop their own uniquely named database on local Postgres. If it is not running they are **skipped, not passed**: `npm test` prints a warning listing them, and `npm run test:ci` exits non-zero. Run `npm run db:up` first. The Docker-context test is likewise skipped when Docker is unavailable. The runner uses the test framework's own events (not output parsing); intentional skips can be allow-listed with a documented reason in `scripts/run-tests.mjs` (currently none).
 
 ### Continuous integration
 
 [.github/workflows/ci.yml](.github/workflows/ci.yml) runs on pushes to `main` and pull requests, with read-only permissions, no repository secrets, and third-party actions pinned to commit SHAs (Dependabot proposes updates). Jobs:
 
 - **quality:** `npm ci`, format, lint, typegen + `tsc`, production build.
-- **database:** disposable Postgres service; migration check, migrate twice (second must be a no-op), health, seed twice (second must create nothing), then the full test suite (unsafe-target rejection, Docker build-context test).
+- **database:** disposable Postgres service; migration check, migrate twice (second must be a no-op), health, seed twice (second must create nothing), then `npm run test:ci` (unsafe-target rejection, Docker build-context test; a skipped test fails the job).
 - **docker:** the image builds.
 - **security:** `npm audit --omit=dev` (fails on high/critical) and a gitleaks scan of the full git history (image pinned by digest).
 
@@ -119,7 +131,7 @@ Pull requests never need production credentials and never connect to production 
 
 | Symptom                                             | What to do                                                                                                                                                                                                               |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Node x is too old`                                 | Install Node >= 22.22 (`nvm install` reads `.nvmrc`), then `npm ci`                                                                                                                                                      |
+| `Node x is not supported`                           | Install Node 24.x (`nvm install` reads `.nvmrc`), then `npm ci`                                                                                                                                                          |
 | `Docker daemon is not running`                      | Start Docker Desktop / the docker service, re-run the command                                                                                                                                                            |
 | `ports are not available` / port 5432 in use        | Set `POSTGRES_PORT` (e.g. 55432) **and the port in `DATABASE_URL`** in `.env`, then `npm run db:down && npm run db:up`. Windows can reserve port ranges; `netsh int ipv4 show excludedportrange protocol=tcp` lists them |
 | `POSTGRES_PASSWORD is not set`                      | Run `npm run setup`                                                                                                                                                                                                      |
@@ -128,7 +140,7 @@ Pull requests never need production credentials and never connect to production 
 | Setup was interrupted                               | Run `npm run setup` again; it is idempotent and only fills missing values. A leftover `.env.tmp` can be deleted                                                                                                          |
 | `db:migrate` failed                                 | The failing migration is rolled back in a transaction, so the schema is unchanged. Read the error, fix, re-run; check state with `npm run db:health`. Never edit an applied migration                                    |
 | `applied migration(s) do not match committed files` | A migration file was edited or removed after it was applied. Restore it from Git (`git checkout -- drizzle/`). For a disposable local database you may instead `npm run db:reset:local` and migrate again                |
-| `Seeding refused`                                   | Intentional: check `APP_ENV` (`development`/`test`), `DB_TARGET=local` and that the URL is loopback                                                                                                                      |
+| `Seeding refused`                                   | Intentional: check `APP_ENV` (`development`/`test`), `DB_TARGET=local` and that the database is the local Compose one (see below)                                                                                        |
 | Database tests are skipped                          | Local Postgres is not reachable: `npm run db:up`                                                                                                                                                                         |
 | Corrupted local data, want a clean start            | `npm run db:reset:local`, `npm run db:migrate`, optionally `npm run db:seed` (local only)                                                                                                                                |
 

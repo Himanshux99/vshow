@@ -6,7 +6,8 @@ import { existsSync, readFileSync } from "node:fs";
 import {
   ENV_FILE,
   EXAMPLE_FILE,
-  MIN_NODE,
+  REQUIRED_NODE_MAJOR,
+  pinnedNpmVersion,
   describeUrl,
   isPlaceholder,
   nodeVersionOk,
@@ -48,7 +49,16 @@ if (existing && dbFlag && env().DB_TARGET && env().DB_TARGET !== dbFlag) {
 // --- tool validation
 if (!nodeVersionOk()) {
   errors.push(
-    `Node ${process.versions.node} is too old; need >= ${MIN_NODE.join(".")}. Install via nvm/fnm (reads .nvmrc) or https://nodejs.org.`,
+    `Node ${process.versions.node} is not supported; this project requires Node ${REQUIRED_NODE_MAJOR}.x. Install via nvm/fnm (reads .nvmrc) or https://nodejs.org.`,
+  );
+}
+const npmPinned = pinnedNpmVersion();
+// Set by npm when launched via `npm run setup` (works on Windows, where spawning "npm" needs a shell).
+const npmActual =
+  process.env.npm_config_user_agent?.match(/^npm\/(\d+\.\d+\.\d+)/)?.[1] ?? run("npm", ["--version"]).stdout?.trim();
+if (npmPinned && npmActual && npmActual !== npmPinned) {
+  notes.push(
+    `npm ${npmActual} differs from the pinned ${npmPinned} (package.json packageManager); run \`npm install -g npm@${npmPinned}\`.`,
   );
 }
 if (target === "local") {

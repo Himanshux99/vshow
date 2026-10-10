@@ -1,31 +1,30 @@
 #!/usr/bin/env node
 // Destroys the LOCAL Docker Postgres volume and recreates an empty database.
-// Refuses anything that is not provably the local compose database.
+// Refuses anything that is not provably the local compose database (shared guard: lib/local-target.ts).
 // Usage: npm run db:reset:local   (non-interactive: -- --confirm=<database name>)
 import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
-import { LOCAL_HOSTS, describeUrl, parseEnv, readEnvFile } from "./lib/env.mjs";
+import { readEnvFile } from "./lib/env.mjs";
+import { TargetGuardError, assertLocalComposeTarget, loadDotenv } from "./lib/local-target.ts";
 
 const refuse = (m) => {
   console.error(`✖ Refusing to reset: ${m}`);
   process.exit(1);
 };
 
-const text = readEnvFile();
-if (text === null) refuse("no .env file. Run `npm run setup` first.");
-const env = parseEnv(text);
-
-if (env.DB_TARGET !== "local") refuse(`DB_TARGET is '${env.DB_TARGET ?? "unset"}', not 'local'.`);
-if (process.env.NODE_ENV === "production") refuse("NODE_ENV=production.");
-if (process.env.DATABASE_URL && process.env.DATABASE_URL !== env.DATABASE_URL) {
-  refuse("DATABASE_URL in your shell differs from .env; unset it to avoid ambiguity.");
+if (readEnvFile() === null) refuse("no .env file. Run `npm run setup` first.");
+// Same precedence as --env-file: shell variables win, .env fills the gaps. The shared guard then
+// refuses if a shell value conflicts with .env, or if the target is not the local Compose database.
+const dotenv = loadDotenv();
+const env = { ...dotenv, ...Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined)) };
+let config;
+try {
+  config = assertLocalComposeTarget(env, { dotenv });
+} catch (err) {
+  if (err instanceof TargetGuardError) refuse(err.message);
+  throw err;
 }
-const d = describeUrl(env.DATABASE_URL ?? "");
-if (!d) refuse("DATABASE_URL is missing or unparsable.");
-if (!LOCAL_HOSTS.has(d.host)) refuse(`database host '${d.host}' is not local.`);
-if (d.port !== String(env.POSTGRES_PORT || 5432))
-  refuse("DATABASE_URL port does not match POSTGRES_PORT (not the compose database).");
-if (d.db !== (env.POSTGRES_DB || "vshow")) refuse("DATABASE_URL database does not match POSTGRES_DB.");
+const d = { db: config.database, port: config.port };
 
 let answer = process.argv.find((a) => a.startsWith("--confirm="))?.slice(10);
 if (answer === undefined) {
