@@ -16,7 +16,7 @@ import {
   getRequestScope,
 } from "../app/server/request-scope.server.ts";
 import { MAX_JSON_BODY_BYTES, parseJsonBody, parseSearchParams } from "../app/server/validation.server.ts";
-import { captureLogs } from "./helpers.ts";
+import { captureLogs, noAuth } from "./helpers.ts";
 
 const SECRET = "s3cr3t-value-123";
 const scopeFor = () => {
@@ -198,7 +198,11 @@ describe("a resource route end to end (middleware + validation + error mapping, 
 
   async function call(body: string) {
     const log = captureLogs();
-    const deps: AppDeps = { logger: log.logger, database: { get: () => assert.fail("no DB"), close: async () => {} } };
+    const deps: AppDeps = {
+      logger: log.logger,
+      database: { get: () => assert.fail("no DB"), close: async () => {} },
+      auth: noAuth,
+    };
     const mw = createRequestScopeMiddleware(() => deps, { generateId: () => "generated-id-0001" });
     const context = new RouterContextProvider();
     const request = jsonRequest(body, { [REQUEST_ID_HEADER]: "client-trace-id-01" });

@@ -55,6 +55,7 @@ Desktop.ini
 !.vscode/settings.json
 *.swp
 *~
+postman/
 
 # --- Claude Code local-only files (shared .claude/ config stays tracked) ---
 .claude/settings.local.json

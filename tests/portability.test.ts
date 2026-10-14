@@ -38,9 +38,13 @@ describe("provider isolation: shared code never imports a hosting provider", () 
     assert.deepEqual(places, [VERCEL_FILE]);
   });
 
-  it("Vercel detection (the VERCEL variable) is read only in platform selection", () => {
+  it("the VERCEL variables are read only by platform selection and by security guards that refuse to run on Vercel", () => {
     const readers = appFiles.filter((f) => /\bVERCEL(_[A-Z]+)?\b/.test(code(f)));
-    assert.deepEqual(readers, ["app/platform/platform.server.ts"]);
+    assert.deepEqual(readers, [
+      "app/auth/config.server.ts", // dev-switcher guard + production-environment origin check: refuse, never enable
+      "app/db/local-target.server.ts", // shared local-database guard: refuses on Vercel
+      "app/platform/platform.server.ts",
+    ]);
   });
 
   it("the vendor package is loaded lazily, never via a static import", () => {
@@ -67,6 +71,9 @@ describe("runtime portability: what is Web-standard and what is Node-specific", 
     "app/server/entry-hooks.server.ts",
     "app/logging/sanitize.server.ts",
     "app/db/config.server.ts",
+    "app/auth/config.server.ts",
+    "app/auth/route-policy.server.ts",
+    "app/auth/vauth.server.ts",
     "app/platform/platform.server.ts",
     "app/platform/vercel.server.ts",
   ];

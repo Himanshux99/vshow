@@ -94,6 +94,8 @@ if (isPlaceholder(env().APP_ENV)) {
   text = setEnvValue(text, "APP_ENV", "development");
   changed.push("APP_ENV");
 }
+// The vauth discovery URL is a fixed public value; add it to .env files created before authentication existed.
+fill("VOSS_DISCOVERY_URL", () => "https://accounts.vosslabs.org/api/auth/.well-known/openid-configuration");
 fill("BETTER_AUTH_SECRET", () => randomBytes(32).toString("base64"));
 if (env().BETTER_AUTH_SECRET.length < 32) {
   notes.push("BETTER_AUTH_SECRET is shorter than 32 characters; replace it with a stronger value.");
@@ -123,6 +125,12 @@ if (target === "local") {
   } else if (!/sslmode=require/.test(env().DATABASE_URL)) {
     notes.push("Neon URL should include ?sslmode=require.");
   }
+}
+
+if (isPlaceholder(env().VOSS_CLIENT_ID) || isPlaceholder(env().VOSS_CLIENT_SECRET)) {
+  notes.push(
+    "Sign-in with vauth needs VOSS_CLIENT_ID and VOSS_CLIENT_SECRET, issued by the vauth maintainers after Vshow is registered (obtain them privately; never commit or paste them). Until then, use the local identity switcher: set VSHOW_DEV_AUTH=1 (APP_ENV=development, local database).",
+  );
 }
 
 if (check) {

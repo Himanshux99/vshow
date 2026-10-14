@@ -33,14 +33,14 @@ Check the database any time with `npm run db:health`.
 
 `npm run setup` creates `.env` from [.env.example](.env.example). It fills only missing or `change-me` values, so re-running never overwrites your settings, and it never prints secrets or full connection strings. `npm run setup:check` validates without writing.
 
-| Variable                                | Purpose                                                     |
-| --------------------------------------- | ----------------------------------------------------------- |
-| `APP_ENV`                               | `development` or `test`. Seeding refuses anything else      |
-| `DB_TARGET`                             | `local` (Docker) or `neon`. Always explicit                 |
-| `POSTGRES_*`                            | Local container credentials (password generated)            |
-| `DATABASE_URL`                          | Runtime connection. Neon: the **pooled** (`-pooler`) string |
-| `DATABASE_URL_DIRECT`                   | Neon only: **direct** string used by `db:migrate`           |
-| `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` | Reserved for the upcoming auth phase (secret is generated)  |
+| Variable                                | Purpose                                                              |
+| --------------------------------------- | -------------------------------------------------------------------- |
+| `APP_ENV`                               | `development` or `test`. Seeding refuses anything else               |
+| `DB_TARGET`                             | `local` (Docker) or `neon`. Always explicit                          |
+| `POSTGRES_*`                            | Local container credentials (password generated)                     |
+| `DATABASE_URL`                          | Runtime connection. Neon: the **pooled** (`-pooler`) string          |
+| `DATABASE_URL_DIRECT`                   | Neon only: **direct** string used by `db:migrate`                    |
+| `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` | Authentication: see the Authentication section (secret is generated) |
 
 `.env` and `.env.*` are git-ignored (only `.env.example` is tracked) and excluded from Docker build contexts.
 
@@ -126,6 +126,34 @@ Database-backed tests create and drop their own uniquely named database on local
 - **security:** `npm audit --omit=dev` (fails on high/critical) and a gitleaks scan of the full git history (image pinned by digest).
 
 Pull requests never need production credentials and never connect to production databases. Note: `npm audit` also reports moderate advisories in `drizzle-kit`'s dev-only esbuild dependency; they concern a dev server we do not run and are excluded from the production audit.
+
+## Authentication (VOSS vauth via Better Auth)
+
+**Status: implemented and tested locally against a mock OpenID Connect provider. Production authentication is deliberately NOT enabled** until (1) Vshow is registered with vauth and (2) the callback-logging risk below has a security decision. Local tests passing does not mean production sign-in is ready.
+
+- **Flow:** Authorization Code + PKCE S256 with vauth (`https://accounts.vosslabs.org/api/auth`), provider ID `voss`, scopes `openid profile email`, `client_secret_post`, explicit issuer validation. Better Auth is pinned to **1.6.23** (do not upgrade to 1.7.x without a separate compatibility review). There are no passwords anywhere.
+- **Callback URLs** (register exactly these, no wildcards): production `https://vshow.vosslabs.org/api/auth/oauth2/callback/voss`, local `http://localhost:5173/api/auth/oauth2/callback/voss`. The dev server is pinned to port 5173 (`strictPort`) so the local callback cannot silently change.
+- **Trust in the identity:** the ID token is verified with `jose` (EdDSA only, issuer, audience = our client ID, expiry, age, JWKS fetched from the discovered issuer) before any claim is used. Only a **strictly verified** email on an exact `vit.edu.in` / `vosslabs.org` domain is accepted, and `sub` is the permanent identity (the email is a mutable attribute). A returning `sub` with a new valid email updates the same user; a conflict, or an email that is no longer allowed, denies sign-in (and revokes that user's sessions). Accounts are **never** linked or merged because emails match.
+- **Authorization is Vshow's alone:** first sign-in creates a user with **no role**; an administrator assigns roles. Anyone without a role goes to `/unclaimed`. Guards in `app/auth/authorize.server.ts` are allowlists, re-read the database on every request (no cookie cache), and each protected route calls its own guard. Deactivating a user ends their sessions immediately (database trigger).
+- **Sessions:** 7 days, refreshed at most once a day, **absolute maximum 30 days from creation** (database trigger, plus an application check). Logout ends the Vshow session only; the vauth single-sign-on session is untouched. Cookies: `vshow.` prefix, HttpOnly, `SameSite=Lax`, `Secure` on https, one trusted origin.
+- **No OAuth tokens are stored.** Hooks null them, `updateAccountOnSignIn` is off, and a database CHECK constraint makes any attempt fail the sign-in. Session IP and user agent are not stored. `app_user.vauth_subject` is kept consistent with `auth_account` by database triggers (immutable once set, conflicts roll the whole sign-in back).
+- **Surface:** `/api/auth/*` is **default-deny**: only the OAuth callback (and `/ok`) are forwarded to Better Auth; everything else is 404, with `Cache-Control: no-store` and `Referrer-Policy: no-referrer` on every response.
+
+| Variable                               | Class                  | Notes                                                                                                    |
+| -------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`                   | secret                 | at least 32 characters; different per environment (generated by `npm run setup`)                         |
+| `BETTER_AUTH_URL`                      | config                 | origin only; `https` in production; exactly `https://vshow.vosslabs.org` in the production environment   |
+| `VOSS_DISCOVERY_URL`                   | config                 | production requires exactly the pinned vauth URL                                                         |
+| `VOSS_CLIENT_ID`, `VOSS_CLIENT_SECRET` | ID config / **secret** | issued privately by the vauth maintainers; separate for local and production; never commit or paste them |
+| `VSHOW_DEV_AUTH`                       | flag                   | local identity switcher; see below                                                                       |
+
+**Local identity switcher** (until Vshow has vauth credentials, and for testing roles): set `VSHOW_DEV_AUTH=1`, then `npm run db:migrate && npm run db:seed && npm run dev` and open `/dev/login`. It signs you in as one of the fixed seeded identities (`admin`, `reviewer`, `manager`, `convener_media`, ...); the browser can only pick a key from that list. It creates a normal Better Auth session; roles and memberships still come from the database. It is enabled only when **all** of these hold, otherwise the server **refuses to start** (and the route/endpoint does not exist when the flag is off): `VSHOW_DEV_AUTH` is exactly `1`; `APP_ENV=development`; `NODE_ENV` is not production; no `VERCEL`/`VERCEL_ENV`; `BETTER_AUTH_URL` is localhost; and the shared local Compose database guard passes (no Neon, no remote). `npm run build` fails while the flag is set (unset it first). With the switcher on, the vauth credentials may be absent; the vauth provider is then simply not registered.
+
+**Unresolved before production authentication can be enabled:**
+
+- **Callback query string in platform logs.** vauth redirects back with `code` and `state` in the URL (its provider supports only the `query` response mode, and Better Auth's callback is GET-only, so `form_post` is not possible). Vshow's own logs record paths only, but Vercel's request logs record the query string and Vercel documents no redaction. Source review shows a logged code and state alone cannot hijack a session (the code is single-use and expires in 10 minutes, exchange needs the client secret and the PKCE verifier kept server-side, and the callback needs the browser's signed state cookie), but that is risk reduction, not elimination. Production sign-in stays blocked until this is explicitly accepted, with compensating controls, or the hosting decision changes.
+- Vshow is not registered with vauth yet (see the registration checklist in the project notes); a real sign-in has never been run.
+- Previews cannot sign in with vauth (redirect URIs are exact-match per origin).
 
 ## Logging and dependency wiring
 

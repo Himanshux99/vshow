@@ -17,7 +17,7 @@ const MAX_STRING = 2000;
 
 /** Keys whose values are credentials or session material. */
 const SECRET_KEY =
-  /pass(word|wd|phrase)?|secret|token|authori[sz]ation|cookie|api[-_]?key|private[-_]?key|signing|signature|credential|session|connection[-_]?string|database[-_]?url|\bdsn\b|csrf|jwt|bearer|x-amz-/i;
+  /pass(word|wd|phrase)?|secret|token|authori[sz]ation|cookie|api[-_]?key|private[-_]?key|signing|signature|credential|session|connection[-_]?string|database[-_]?url|\bdsn\b|csrf|jwt|bearer|x-amz-|auth(orization)?[-_]?code|code[-_]?(verifier|challenge)|verifier|nonce|^state$|^oauth/i;
 /** Keys that hold personal data or whole request/upload payloads: omitted by default. */
 const PRIVATE_KEY =
   /^(e-?mail|phone|mobile|address|ip|ip[-_]?address|remote[-_]?addr(ess)?|user[-_]?agent|full[-_]?name|first[-_]?name|last[-_]?name|body|raw[-_]?body|request[-_]?body|form[-_]?data|multipart|file|files|buffer|bytes|chunk)$/i;
@@ -30,6 +30,9 @@ const AWS_ACCESS_KEY = /\b(AKIA|ASIA)[0-9A-Z]{16}\b/g;
 const PRIVATE_KEY_BLOCK = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(-----END [A-Z ]*PRIVATE KEY-----|$)/g;
 const SIGNED_QUERY =
   /\b(X-Amz-(?:Signature|Credential|Security-Token)|Signature|sig|access_token|id_token|refresh_token)=[^&\s'"]+/gi;
+// OAuth authorization-response parameters. Anchored to a query-string separator so ordinary prose such as
+// "status code=200" is left alone.
+const OAUTH_QUERY = /([?&])(code|state|code_verifier|error_description)=[^&\s'"#]+/gi;
 const KEY_VALUE =
   /\b(password|passwd|pwd|secret|token|api[-_]?key|authorization|cookie|set-cookie|session[-_]?id)\s*[=:]\s*(?:"[^"]*"|'[^']*'|[^\s,;&]+)/gi;
 const EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
@@ -45,6 +48,7 @@ export function sanitizeString(input: string): string {
   s = s.replace(JWT, "[REDACTED_JWT]");
   s = s.replace(AWS_ACCESS_KEY, "[REDACTED_KEY]");
   s = s.replace(SIGNED_QUERY, "$1=[REDACTED]");
+  s = s.replace(OAUTH_QUERY, "$1$2=[REDACTED]");
   s = s.replace(KEY_VALUE, "$1=[REDACTED]");
   s = s.replace(EMAIL, "[EMAIL]");
   return s;

@@ -114,10 +114,10 @@ describe("migrations against a disposable local database", async () => {
   it("applies all migrations", opts, () => {
     const r = runNode(["scripts/db-migrate.ts"], env());
     assert.equal(r.status, 0, r.stderr || r.stdout);
-    assert.match(r.stdout, /Applied 1 migration/);
+    assert.match(r.stdout, /Applied 4 migration/);
   });
 
-  it("creates the 12 approved tables and enforces key constraints", opts, async () => {
+  it("creates the 12 approved tables plus the 3 auth tables and enforces key constraints", opts, async () => {
     const c = new pg.Client({ connectionString: testUrl });
     await c.connect();
     try {
@@ -130,6 +130,9 @@ describe("migrations against a disposable local database", async () => {
           "app_role",
           "app_user",
           "audit_event",
+          "auth_account",
+          "auth_session",
+          "auth_verification",
           "committee",
           "committee_membership",
           "review_decision",
@@ -214,7 +217,7 @@ describe("migrations against a disposable local database", async () => {
     const r = runNode(["scripts/db-health.ts"], env());
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /Connected to 127\.0\.0\.1/);
-    assert.match(r.stdout, /1 applied, 0 pending/);
+    assert.match(r.stdout, /4 applied, 0 pending/);
     assert.ok(!r.stdout.includes(new URL(testUrl).password));
   });
 

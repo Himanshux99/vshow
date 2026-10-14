@@ -340,6 +340,7 @@ export function buildFixtures(): Fixtures {
       display_name: `[SEED] ${name}`,
       vauth_subject: `seed-${key}`,
       is_active: !INACTIVE_USERS.has(key),
+      email_verified: true, // synthetic users; they never pass through real sign-in
       created_at: at(0),
       updated_at: at(0),
     });

@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import pg from "pg";
 import { isLocalHost, resolveDbConfig } from "../app/db/config.server.ts";
+import type { AuthProvider } from "../app/auth/auth.server.ts";
 import { createLogger, type LogLevel } from "../app/logging/logger.server.ts";
 
 /**
@@ -70,3 +71,14 @@ export function captureLogs(level: LogLevel = "trace") {
     text: () => lines.join(""),
   };
 }
+
+/** An auth provider for tests that never touch authentication. */
+export const noAuth: AuthProvider = {
+  devAuth: { enabled: false },
+  config() {
+    throw new Error("authentication is not configured in this test");
+  },
+  get() {
+    throw new Error("authentication is not configured in this test");
+  },
+};
