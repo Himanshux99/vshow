@@ -631,3 +631,19 @@ Required for the core workflow: - `app_user` - `app_role` -
 Do not add player telemetry, playback sessions, automated conflict
 detection, or a full timeline schema until the corresponding Phase 2
 requirements are approved.
+
+
+## 12. Phase 1 implementation amendments (recorded after approval)
+
+These additions were approved when Phase 1 implementation started (migration `0004_core_workflow`). Nothing above was rewritten; where an item refines an earlier rule, it says so.
+
+1. **`submission_revision`** (new, immutable, append-only): `id`, `submission_id`, `revision_number` (unique per submission), `title`, `description`, `media_version_id` (composite FK proving it belongs to the submission), `requested_windows` (JSONB array of `{screenId, slotNumber, startAt, endAt, note}`), `created_by_user_id`, `created_at`. This is the immutable-snapshot option chosen for §9.5/§10.7. `submission.current_revision_id` points at the current revision (composite FK).
+2. **`review_decision.revision_id`** (new, NOT NULL): the exact revision evaluated; composite FKs force it to belong to the submission and to name the same media version as the decision. A trigger accepts a decision only on a `PENDING_REVIEW` submission, for its current revision, by someone other than `created_by_user_id`. Refines §4.10.
+3. **Comments:** a rejection reason and a change-request comment are both mandatory (constraint `review_decision_reason_required`; previously only `CHANGES_REQUESTED`).
+4. **`submission.resubmission_of_id`** (new, nullable self-reference): a rejected submission is terminal; a resubmission is a new submission linked to it, with its own media and no inherited approval.
+5. **`upload_reservation`** (new): one row per server-authorised upload (`id` becomes the media version id, staging and final object keys, declared type and size, status `PENDING|FINALIZED|REJECTED|EXPIRED`). A finished reservation can never change.
+6. **`media_version.storage_etag`** (new, nullable): the provider ETag of the validated final object.
+7. **`reference_counter`** and `vshow_next_reference_code(year)`: concurrency-safe `VS-YYYY-NNNNNN` codes (year in `Asia/Kolkata`), gap-free per year.
+8. **Append-only enforcement** by triggers (UPDATE/DELETE refused) on `media_version`, `review_decision`, `audit_event` and `submission_revision`. TRUNCATE is not blocked by a trigger (the migration safety check forbids that statement in migration files); the application never issues it.
+9. **Requested windows (refines §4.9):** both `preferred_start_at` and `preferred_end_at` are required to **submit** (columns stay nullable so an incomplete draft can exist; the service validates), the end must be after the start, the start must be in the future at submission (`Asia/Kolkata`), at most 10 windows by default (`MAX_REQUEST_WINDOWS`), and **overlapping windows are allowed**, including on the same screen at the same time. `slot_number` is assigned per screen by the server.
+10. **Reviewers** cannot see drafts and cannot decide on a submission they created. A pending submission cannot be edited; withdrawal is out of scope. Editing or replacing media of an approved submission returns it to `DRAFT` (approval withdrawn, audited as `APPROVAL_INVALIDATED`).

@@ -30,6 +30,20 @@ describe("server-only boundaries (source)", () => {
     assert.deepEqual(users, ["app/logging/logger.server.ts"]);
   });
 
+  it("the AWS SDK is imported by exactly one module: the Neon storage adapter", () => {
+    const users = appFiles.filter((f) => importsOf(f).some((i) => i.startsWith("@aws-sdk/")));
+    assert.deepEqual(users, ["app/storage/neon.server.ts"]);
+  });
+
+  it("workflow code reaches object storage only through the ObjectStorage interface", () => {
+    const offenders = appFiles.filter(
+      (f) =>
+        (f.startsWith("app/submissions/") || f.startsWith("app/routes/") || f.startsWith("app/components/")) &&
+        importsOf(f).some((i) => /storage\/(neon|config|provider|unconfigured)\.server/.test(i)),
+    );
+    assert.deepEqual(offenders, []);
+  });
+
   it("process.env is read only by the composition root", () => {
     const readers = appFiles.filter((f) => /process\.env/.test(readFileSync(f, "utf8").replace(/\/\/.*$/gm, "")));
     assert.deepEqual(readers, ["app/server/container.server.ts"]);

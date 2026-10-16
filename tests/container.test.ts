@@ -5,7 +5,7 @@ import { DbConfigError, resolveDbConfig, type DbConfig } from "../app/db/config.
 import { createDbProvider, type Db, type DbProvider, type PoolLike } from "../app/db/client.server.ts";
 import { createContainer, getContainer, type AppDeps } from "../app/server/container.server.ts";
 import { createNoopLogger } from "../app/logging/logger.server.ts";
-import { captureLogs, noAuth } from "./helpers.ts";
+import { captureLogs, noAuth, noStorage, testMedia } from "./helpers.ts";
 
 const SECRET = "s3cr3t-value-123";
 const LOCAL_URL = `postgresql://vshow:${SECRET}@127.0.0.1:55432/vshow`;
@@ -138,7 +138,7 @@ describe("dependency injection: business code with fake dependencies", () => {
       },
       close: async () => {},
     };
-    const deps: AppDeps = { logger: log.logger, database: fake, auth: noAuth };
+    const deps: AppDeps = { logger: log.logger, database: fake, auth: noAuth, storage: noStorage, media: testMedia };
     assert.equal(gets, 0, "constructing dependencies does not use the database");
     assert.equal(await countThings(deps), 42);
     assert.equal(gets, 1);
@@ -149,6 +149,8 @@ describe("dependency injection: business code with fake dependencies", () => {
     const deps: AppDeps = {
       logger: createNoopLogger(),
       auth: noAuth,
+      storage: noStorage,
+      media: testMedia,
       database: {
         get: () => {
           throw new Error("simulated outage");

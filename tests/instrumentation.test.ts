@@ -9,14 +9,14 @@ import {
   logUnscopedRequest,
 } from "../app/server/instrumentation.server.ts";
 import { appContext } from "../app/server/request-scope.server.ts";
-import { captureLogs, noAuth } from "./helpers.ts";
+import { captureLogs, noAuth, noStorage, testMedia } from "./helpers.ts";
 
 const SECRET = "s3cr3t-value-123";
 
 function setup() {
   const log = captureLogs();
   const database: DbProvider = { get: () => ({}) as Db, close: async () => {} };
-  const deps: AppDeps = { logger: log.logger, database, auth: noAuth };
+  const deps: AppDeps = { logger: log.logger, database, auth: noAuth, storage: noStorage, media: testMedia };
   // Capture the `request` instrumentation React Router would call around every request.
   let around!: (
     handleRequest: () => Promise<unknown>,

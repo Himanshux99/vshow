@@ -9,11 +9,18 @@ import { createDbProvider, type DbProvider } from "../db/client.server.ts";
 import { assertLocalComposeTarget } from "../db/local-target.server.ts";
 import { createLogger, resolveLogConfig, type Logger } from "../logging/logger.server.ts";
 import { selectPlatform } from "../platform/platform.server.ts";
+import type { ObjectStorage } from "../storage/object-storage.server.ts";
+import { createStorage } from "../storage/provider.server.ts";
+import { resolveMediaPolicy, type MediaPolicy } from "../submissions/media-policy.server.ts";
 
 export interface AppDeps {
   logger: Logger;
   database: DbProvider;
   auth: AuthProvider;
+  /** Media object storage (Neon Object Storage, or the fail-closed provider when not configured). */
+  storage: ObjectStorage;
+  /** File size, window-count and URL lifetime limits. */
+  media: MediaPolicy;
 }
 
 type Env = Record<string, string | undefined>;
@@ -56,7 +63,10 @@ export function createContainer(env: Env = process.env, isTty = Boolean(globalTh
       return (auth ??= buildAuth({ config: authProvider.config(), database, logger, devAuth }));
     },
   };
-  return { logger, database, auth: authProvider };
+  const { policy: media, invalid } = resolveMediaPolicy(env);
+  if (invalid.length > 0) logger.warn("ignoring invalid media settings; using defaults", { variables: invalid });
+  const storage = createStorage(env, logger);
+  return { logger, database, auth: authProvider, storage, media };
 }
 
 // One container per server process. It is cached on globalThis only so dev-mode hot reloads and warm

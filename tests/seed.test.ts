@@ -57,7 +57,7 @@ describe("seed guard (fail closed)", () => {
 
 describe("seed fixtures integrity (no database)", () => {
   const f = buildFixtures();
-  const all = Object.entries(f).filter(([k]) => k !== "currentVersions") as Array<
+  const all = Object.entries(f).filter(([k]) => k !== "currentVersions" && k !== "currentRevisions") as Array<
     [string, Array<Record<string, unknown>>]
   >;
 

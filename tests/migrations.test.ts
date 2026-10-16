@@ -114,98 +114,120 @@ describe("migrations against a disposable local database", async () => {
   it("applies all migrations", opts, () => {
     const r = runNode(["scripts/db-migrate.ts"], env());
     assert.equal(r.status, 0, r.stderr || r.stdout);
-    assert.match(r.stdout, /Applied 4 migration/);
+    assert.match(r.stdout, /Applied 5 migration/);
   });
 
-  it("creates the 12 approved tables plus the 3 auth tables and enforces key constraints", opts, async () => {
-    const c = new pg.Client({ connectionString: testUrl });
-    await c.connect();
-    try {
-      const t = await c.query(
-        "select table_name from information_schema.tables where table_schema='public' order by 1",
-      );
-      assert.deepEqual(
-        t.rows.map((r) => r.table_name),
-        [
-          "app_role",
-          "app_user",
-          "audit_event",
-          "auth_account",
-          "auth_session",
-          "auth_verification",
-          "committee",
-          "committee_membership",
-          "review_decision",
-          "schedule_entry",
-          "screen",
-          "screen_request",
-          "submission",
-          "user_role",
-          "media_version",
-        ].sort(),
-      );
-      // Email must be normalized.
-      await assert.rejects(
-        c.query("insert into app_user(email, display_name) values ('A@B.com','x')"),
-        /app_user_email_normalized/,
-      );
-      const u = (await c.query("insert into app_user(email, display_name) values ('a@b.com','x') returning id")).rows[0]
-        .id;
-      const com = (await c.query("insert into committee(name, code) values ('c','c1') returning id")).rows[0].id;
-      const mkSub = async (ref: string) =>
-        (
+  it(
+    "creates the 12 approved tables, the 3 workflow-support tables and the 3 auth tables, and enforces key constraints",
+    opts,
+    async () => {
+      const c = new pg.Client({ connectionString: testUrl });
+      await c.connect();
+      try {
+        const t = await c.query(
+          "select table_name from information_schema.tables where table_schema='public' order by 1",
+        );
+        assert.deepEqual(
+          t.rows.map((r) => r.table_name),
+          [
+            "app_role",
+            "app_user",
+            "audit_event",
+            "auth_account",
+            "auth_session",
+            "auth_verification",
+            "committee",
+            "committee_membership",
+            "reference_counter",
+            "review_decision",
+            "schedule_entry",
+            "screen",
+            "screen_request",
+            "submission",
+            "submission_revision",
+            "upload_reservation",
+            "user_role",
+            "media_version",
+          ].sort(),
+        );
+        // Email must be normalized.
+        await assert.rejects(
+          c.query("insert into app_user(email, display_name) values ('A@B.com','x')"),
+          /app_user_email_normalized/,
+        );
+        const u = (await c.query("insert into app_user(email, display_name) values ('a@b.com','x') returning id"))
+          .rows[0].id;
+        const com = (await c.query("insert into committee(name, code) values ('c','c1') returning id")).rows[0].id;
+        const mkSub = async (ref: string) =>
+          (
+            await c.query(
+              "insert into submission(reference_code, committee_id, created_by_user_id, title, workflow_status) values ($1,$2,$3,'t','DRAFT') returning id",
+              [ref, com, u],
+            )
+          ).rows[0].id;
+        const s1 = await mkSub("R1");
+        const s2 = await mkSub("R2");
+        const v1 = (
           await c.query(
-            "insert into submission(reference_code, committee_id, created_by_user_id, title, workflow_status) values ($1,$2,$3,'t','DRAFT') returning id",
-            [ref, com, u],
+            "insert into media_version(submission_id, version_number, object_key, original_filename, content_type, size_bytes, uploaded_by_user_id) values ($1,1,'k1','a.mp4','video/mp4',10,$2) returning id",
+            [s1, u],
           )
         ).rows[0].id;
-      const s1 = await mkSub("R1");
-      const s2 = await mkSub("R2");
-      const v1 = (
-        await c.query(
-          "insert into media_version(submission_id, version_number, object_key, original_filename, content_type, size_bytes, uploaded_by_user_id) values ($1,1,'k1','a.mp4','video/mp4',10,$2) returning id",
-          [s1, u],
-        )
-      ).rows[0].id;
-      await assert.rejects(
-        c.query(
-          "insert into media_version(submission_id, version_number, object_key, original_filename, content_type, size_bytes, uploaded_by_user_id) values ($1,2,'k2','a.mp4','video/mp4',0,$2)",
-          [s1, u],
-        ),
-        /media_version_size_positive/,
-      );
-      // current_version_id must belong to the same submission.
-      await assert.rejects(
-        c.query("update submission set current_version_id=$1 where id=$2", [v1, s2]),
-        /submission_current_version_fk/,
-      );
-      await c.query("update submission set current_version_id=$1 where id=$2", [v1, s1]);
-      // A review must reference a version of its own submission, and changes need a comment.
-      await assert.rejects(
-        c.query(
-          "insert into review_decision(submission_id, media_version_id, reviewer_user_id, decision) values ($1,$2,$3,'APPROVED')",
-          [s2, v1, u],
-        ),
-        /review_decision_version_fk/,
-      );
-      await assert.rejects(
-        c.query(
-          "insert into review_decision(submission_id, media_version_id, reviewer_user_id, decision) values ($1,$2,$3,'CHANGES_REQUESTED')",
-          [s1, v1, u],
-        ),
-        /review_decision_changes_need_comment/,
-      );
-      await assert.rejects(
-        c.query(
-          "insert into submission(reference_code, committee_id, created_by_user_id, title, workflow_status) values ('R3',$1,$2,'t','BOGUS')",
-          [com, u],
-        ),
-        /submission_workflow_status_valid/,
-      );
-    } finally {
-      await c.end();
-    }
-  });
+        await assert.rejects(
+          c.query(
+            "insert into media_version(submission_id, version_number, object_key, original_filename, content_type, size_bytes, uploaded_by_user_id) values ($1,2,'k2','a.mp4','video/mp4',0,$2)",
+            [s1, u],
+          ),
+          /media_version_size_positive/,
+        );
+        // current_version_id must belong to the same submission.
+        await assert.rejects(
+          c.query("update submission set current_version_id=$1 where id=$2", [v1, s2]),
+          /submission_current_version_fk/,
+        );
+        await c.query("update submission set current_version_id=$1 where id=$2", [v1, s1]);
+        // A review must reference a revision of its own submission (and that revision's version), and rejections and
+        // change requests need a comment. (Setup: a second user as reviewer, a revision, and a pending submission.)
+        const rev = (await c.query("insert into app_user(email, display_name) values ('rev@b.com','r') returning id"))
+          .rows[0].id;
+        const r1 = (
+          await c.query(
+            "insert into submission_revision(submission_id, revision_number, title, media_version_id, requested_windows, created_by_user_id) values ($1,1,'t',$2,'[]',$3) returning id",
+            [s1, v1, u],
+          )
+        ).rows[0].id;
+        await c.query("update submission set current_revision_id=$1, workflow_status='PENDING_REVIEW' where id=$2", [
+          r1,
+          s1,
+        ]);
+        await assert.rejects(
+          c.query(
+            "insert into review_decision(submission_id, media_version_id, revision_id, reviewer_user_id, decision) values ($1,$2,$3,$4,'APPROVED')",
+            [s2, v1, r1, rev],
+          ),
+          /pending review|foreign key/,
+        );
+        for (const decision of ["CHANGES_REQUESTED", "REJECTED"]) {
+          await assert.rejects(
+            c.query(
+              "insert into review_decision(submission_id, media_version_id, revision_id, reviewer_user_id, decision) values ($1,$2,$3,$4,$5)",
+              [s1, v1, r1, rev, decision],
+            ),
+            /review_decision_reason_required/,
+          );
+        }
+        await assert.rejects(
+          c.query(
+            "insert into submission(reference_code, committee_id, created_by_user_id, title, workflow_status) values ('R3',$1,$2,'t','BOGUS')",
+            [com, u],
+          ),
+          /submission_workflow_status_valid/,
+        );
+      } finally {
+        await c.end();
+      }
+    },
+  );
 
   it("is idempotent: a second run applies nothing", opts, () => {
     const r = runNode(["scripts/db-migrate.ts"], env());
@@ -217,7 +239,7 @@ describe("migrations against a disposable local database", async () => {
     const r = runNode(["scripts/db-health.ts"], env());
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /Connected to 127\.0\.0\.1/);
-    assert.match(r.stdout, /4 applied, 0 pending/);
+    assert.match(r.stdout, /5 applied, 0 pending/);
     assert.ok(!r.stdout.includes(new URL(testUrl).password));
   });
 

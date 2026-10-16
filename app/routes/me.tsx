@@ -1,4 +1,4 @@
-import { Form } from "react-router";
+import { Form, Link } from "react-router";
 import type { Route } from "./+types/me";
 import { requireAssignedUser } from "../auth/authorize.server";
 import { getRequestScope } from "../server/request-scope.server";
@@ -39,6 +39,18 @@ export default function Me({ loaderData }: Route.ComponentProps) {
           </li>
         ))}
       </ul>
+      <nav className="mt-6 flex gap-4 text-sm">
+        {loaderData.roles.includes("CONVENER") && (
+          <Link className="underline" to="/submissions">
+            My submissions
+          </Link>
+        )}
+        {loaderData.roles.includes("REVIEWER") && (
+          <Link className="underline" to="/review">
+            Review queue
+          </Link>
+        )}
+      </nav>
       <Form method="post" action="/logout" className="mt-6">
         <button type="submit" className="rounded border px-4 py-2">
           Sign out

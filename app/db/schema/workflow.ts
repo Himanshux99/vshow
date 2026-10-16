@@ -3,7 +3,7 @@ import { check, foreignKey, index, jsonb, pgTable, text, timestamp, uuid, varcha
 import { REVIEW_DECISIONS, SCHEDULE_STATUSES, sqlList } from "./values.ts";
 import { appUser } from "./identity.ts";
 import { screen } from "./campus.ts";
-import { mediaVersion, submission } from "./submissions.ts";
+import { mediaVersion, submission, submissionRevision } from "./submissions.ts";
 
 // Schema doc §4.10 (append-only)
 export const reviewDecision = pgTable(
@@ -14,6 +14,8 @@ export const reviewDecision = pgTable(
       .notNull()
       .references(() => submission.id),
     mediaVersionId: uuid("media_version_id").notNull(),
+    // The exact immutable revision that was evaluated.
+    revisionId: uuid("revision_id").notNull(),
     reviewerUserId: uuid("reviewer_user_id")
       .notNull()
       .references(() => appUser.id),
@@ -28,12 +30,25 @@ export const reviewDecision = pgTable(
       columns: [t.mediaVersionId, t.submissionId],
       foreignColumns: [mediaVersion.id, mediaVersion.submissionId],
     }),
+    // The revision must belong to this submission, and must be the revision of the very version the decision names.
+    foreignKey({
+      name: "review_decision_revision_fk",
+      columns: [t.revisionId, t.submissionId],
+      foreignColumns: [submissionRevision.id, submissionRevision.submissionId],
+    }),
+    foreignKey({
+      name: "review_decision_revision_version_fk",
+      columns: [t.revisionId, t.mediaVersionId],
+      foreignColumns: [submissionRevision.id, submissionRevision.mediaVersionId],
+    }),
     check("review_decision_decision_valid", sql.raw(`"decision" IN (${sqlList(REVIEW_DECISIONS)})`)),
+    // A rejection needs a reason and a change request needs a comment.
     check(
-      "review_decision_changes_need_comment",
-      sql`${t.decision} <> 'CHANGES_REQUESTED' OR (${t.comment} IS NOT NULL AND btrim(${t.comment}) <> '')`,
+      "review_decision_reason_required",
+      sql`${t.decision} NOT IN ('CHANGES_REQUESTED', 'REJECTED') OR (${t.comment} IS NOT NULL AND btrim(${t.comment}) <> '')`,
     ),
     index("review_decision_submission_created_idx").on(t.submissionId, t.createdAt.desc()),
+    index("review_decision_revision_created_idx").on(t.revisionId, t.createdAt.desc()),
     index("review_decision_version_created_idx").on(t.mediaVersionId, t.createdAt.desc()),
   ],
 );

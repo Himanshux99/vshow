@@ -10,7 +10,7 @@ import {
   getRequestScope,
   resolveRequestId,
 } from "../app/server/request-scope.server.ts";
-import { captureLogs, noAuth } from "./helpers.ts";
+import { captureLogs, noAuth, noStorage, testMedia } from "./helpers.ts";
 
 const SECRET = "s3cr3t-value-123";
 
@@ -25,7 +25,7 @@ function makeDeps() {
     },
     close: async () => {},
   };
-  const deps: AppDeps = { logger: log.logger, database, auth: noAuth };
+  const deps: AppDeps = { logger: log.logger, database, auth: noAuth, storage: noStorage, media: testMedia };
   return { deps, log, dbCalls: () => dbCalls };
 }
 

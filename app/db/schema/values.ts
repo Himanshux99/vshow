@@ -12,12 +12,14 @@ export const WORKFLOW_STATUSES = [
   "CANCELLED",
 ] as const;
 export const REVIEW_DECISIONS = ["APPROVED", "REJECTED", "CHANGES_REQUESTED"] as const;
+export const UPLOAD_STATUSES = ["PENDING", "FINALIZED", "REJECTED", "EXPIRED"] as const;
 export const SCHEDULE_STATUSES = ["NOT_SCHEDULED", "SCHEDULED", "PLAYING_CONFIRMED", "COMPLETED", "CANCELLED"] as const;
 
 export type RoleCode = (typeof ROLE_CODES)[number];
 export type MembershipType = (typeof MEMBERSHIP_TYPES)[number];
 export type WorkflowStatus = (typeof WORKFLOW_STATUSES)[number];
 export type ReviewDecisionValue = (typeof REVIEW_DECISIONS)[number];
+export type UploadStatus = (typeof UPLOAD_STATUSES)[number];
 export type ScheduleStatus = (typeof SCHEDULE_STATUSES)[number];
 
 /** SQL list literal for CHECK constraints, e.g. 'A', 'B'. Values are static constants. */

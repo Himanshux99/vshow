@@ -283,12 +283,15 @@ export interface Fixtures {
   screens: Row[];
   submissions: Row[];
   mediaVersions: Row[];
+  revisions: Row[];
   screenRequests: Row[];
   reviewDecisions: Row[];
   scheduleEntries: Row[];
   auditEvents: Row[];
   /** submission id -> current version id (set after versions exist, to satisfy the composite FK). */
   currentVersions: Array<{ submissionId: string; versionId: string }>;
+  /** submission id -> current revision id (set after revisions exist, to satisfy the composite FK). */
+  currentRevisions: Array<{ submissionId: string; revisionId: string }>;
 }
 
 const ref = (n: number) => `${SEED_REF_PREFIX}${String(n).padStart(4, "0")}`;
@@ -303,11 +306,13 @@ export function buildFixtures(): Fixtures {
     screens: [],
     submissions: [],
     mediaVersions: [],
+    revisions: [],
     screenRequests: [],
     reviewDecisions: [],
     scheduleEntries: [],
     auditEvents: [],
     currentVersions: [],
+    currentRevisions: [],
   };
   const admin = seedId("user:admin");
   const meta = { synthetic: true };
@@ -436,6 +441,33 @@ export function buildFixtures(): Fixtures {
       });
       audit(`sub:${s.n}:v${v.n}`, creator, "MEDIA_VERSION_UPLOADED", "MEDIA_VERSION", vid(v.n), sid, v.day);
     }
+    // Every version of a submission that has been submitted was snapshotted as a revision (revision n = version n).
+    if (s.status !== "DRAFT") {
+      const windows = JSON.stringify(
+        s.requests.map((r) => ({
+          screenId: seedId(`screen:${r.screen}`),
+          slotNumber: r.slot,
+          startAt: r.start === undefined ? null : at(r.start),
+          endAt: r.end === undefined ? null : at(r.end),
+          note: r.note ?? null,
+        })),
+      );
+      for (const v of s.versions) {
+        const review = s.reviews.find((x) => x.version === v.n);
+        f.revisions.push({
+          id: seedId(`revision:${s.n}:${v.n}`),
+          submission_id: sid,
+          revision_number: v.n,
+          title: `[SEED] ${s.title}`,
+          description: s.description,
+          media_version_id: vid(v.n),
+          requested_windows: windows,
+          created_by_user_id: creator,
+          created_at: at(review ? review.day - 1 : (s.submittedDay ?? s.createdDay)),
+        });
+      }
+      f.currentRevisions.push({ submissionId: sid, revisionId: seedId(`revision:${s.n}:${s.currentVersion}`) });
+    }
     for (const r of s.requests) {
       f.screenRequests.push({
         id: seedId(`request:${s.n}:${r.screen}:${r.slot}`),
@@ -455,6 +487,7 @@ export function buildFixtures(): Fixtures {
         id,
         submission_id: sid,
         media_version_id: vid(r.version),
+        revision_id: seedId(`revision:${s.n}:${r.version}`),
         reviewer_user_id: reviewer,
         decision: r.decision,
         comment: r.comment ?? null,

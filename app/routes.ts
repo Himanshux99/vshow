@@ -6,6 +6,16 @@ export default [
   route("logout", "routes/logout.ts"),
   route("unclaimed", "routes/unclaimed.tsx"),
   route("me", "routes/me.tsx"),
+  // Convener workflow: drafts, media upload (direct to object storage), submission for review.
+  route("submissions", "routes/submissions._index.tsx"),
+  route("submissions/new", "routes/submissions.new.tsx"),
+  route("submissions/:id", "routes/submissions.$id.tsx"),
+  route("submissions/:id/upload", "routes/submissions.$id.upload.ts"),
+  route("submissions/:id/upload/finalize", "routes/submissions.$id.upload.finalize.ts"),
+  route("submissions/:id/versions/:versionId/file", "routes/submissions.$id.versions.$versionId.file.ts"),
+  // Corporate Communication review (global reviewers).
+  route("review", "routes/review._index.tsx"),
+  route("review/:id", "routes/review.$id.tsx"),
   // Local development only: the loader answers 404 unless every dev-auth guard passed at startup.
   route("dev/login", "routes/dev.login.tsx"),
   // Better Auth (OAuth callback). Default-deny allowlist: see app/auth/route-policy.server.ts.

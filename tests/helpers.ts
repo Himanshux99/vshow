@@ -4,6 +4,8 @@ import pg from "pg";
 import { isLocalHost, resolveDbConfig } from "../app/db/config.server.ts";
 import type { AuthProvider } from "../app/auth/auth.server.ts";
 import { createLogger, type LogLevel } from "../app/logging/logger.server.ts";
+import { createUnconfiguredStorage } from "../app/storage/unconfigured.server.ts";
+import { DEFAULT_MEDIA_POLICY } from "../app/submissions/media-policy.server.ts";
 
 /**
  * Runs a node script with the real environment plus test defaults: APP_ENV=test (so throwaway
@@ -82,3 +84,7 @@ export const noAuth: AuthProvider = {
     throw new Error("authentication is not configured in this test");
   },
 };
+
+/** Storage for tests that never touch media: refuses every call, like the real unconfigured provider. */
+export const noStorage = createUnconfiguredStorage();
+export const testMedia = { ...DEFAULT_MEDIA_POLICY };

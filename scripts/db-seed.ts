@@ -81,13 +81,35 @@ async function seed(c: pg.Client) {
       versionId,
     ]);
   }
+  await insertMissing(c, "submission_revision", fx.revisions);
+  for (const { submissionId, revisionId } of fx.currentRevisions) {
+    await c.query("update submission set current_revision_id = $2 where id = $1 and current_revision_id is null", [
+      submissionId,
+      revisionId,
+    ]);
+  }
   await insertMissing(c, "screen_request", fx.screenRequests);
+  // Fixture history includes decisions on SUPERSEDED revisions (and on submissions no longer pending), which the
+  // live guard trigger correctly refuses for real traffic. Only this guarded, local-only, transactional seed step
+  // switches it off, and it is switched back on before the transaction ends.
+  await c.query("alter table review_decision disable trigger review_decision_guard");
   await insertMissing(c, "review_decision", fx.reviewDecisions);
+  await c.query("alter table review_decision enable trigger review_decision_guard");
   await insertMissing(c, "schedule_entry", fx.scheduleEntries);
   await insertMissing(c, "audit_event", fx.auditEvents);
 }
 
+// Append-only tables refuse DELETE. Removing fixture rows is the one sanctioned exception: it runs only behind the
+// local-target guard and --confirm, inside a transaction, and re-enables every trigger before it ends.
+const APPEND_ONLY = [
+  ["media_version", "media_version_append_only"],
+  ["review_decision", "review_decision_append_only"],
+  ["audit_event", "audit_event_append_only"],
+  ["submission_revision", "submission_revision_append_only"],
+] as const;
+
 async function removeSeed(c: pg.Client) {
+  for (const [table, trigger] of APPEND_ONLY) await c.query(`alter table ${table} disable trigger ${trigger}`);
   const del = async (table: string, col: string, list: string[]) => {
     const res = await c.query(`delete from "${table}" where "${col}" = any($1::uuid[])`, [list]);
     console.log(`  ${table.padEnd(22)} -${res.rowCount ?? 0}`);
@@ -97,7 +119,11 @@ async function removeSeed(c: pg.Client) {
   await del("schedule_entry", "id", ids(fx.scheduleEntries));
   await del("review_decision", "id", ids(fx.reviewDecisions));
   await del("screen_request", "id", ids(fx.screenRequests));
-  await c.query("update submission set current_version_id = null where id = any($1::uuid[])", [subs]);
+  await c.query(
+    "update submission set current_version_id = null, current_revision_id = null where id = any($1::uuid[])",
+    [subs],
+  );
+  await del("submission_revision", "id", ids(fx.revisions));
   await del("media_version", "id", ids(fx.mediaVersions));
   await del("submission", "id", subs);
   await del("committee_membership", "id", ids(fx.memberships));
@@ -105,6 +131,7 @@ async function removeSeed(c: pg.Client) {
   await del("committee", "id", ids(fx.committees));
   await del("screen", "id", ids(fx.screens));
   await del("app_user", "id", ids(fx.users));
+  for (const [table, trigger] of APPEND_ONLY) await c.query(`alter table ${table} enable trigger ${trigger}`);
   console.log("  app_role               kept (shared reference data)");
 }
 

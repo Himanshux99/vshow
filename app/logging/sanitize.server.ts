@@ -27,6 +27,8 @@ const URL_CREDENTIALS = /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@'"<>]+:[^\s/@'"<>]*@/gi
 const BEARER = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{6,}/gi;
 const JWT = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g;
 const AWS_ACCESS_KEY = /\b(AKIA|ASIA)[0-9A-Z]{16}\b/g;
+// Neon storage credentials: access key ids (nak_...) and secrets (nsk_...).
+const NEON_STORAGE_KEY = /\bn[as]k_[A-Za-z]+_[A-Za-z0-9_-]{8,}/g;
 const PRIVATE_KEY_BLOCK = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(-----END [A-Z ]*PRIVATE KEY-----|$)/g;
 const SIGNED_QUERY =
   /\b(X-Amz-(?:Signature|Credential|Security-Token)|Signature|sig|access_token|id_token|refresh_token)=[^&\s'"]+/gi;
@@ -47,6 +49,7 @@ export function sanitizeString(input: string): string {
   s = s.replace(BEARER, "$1 [REDACTED]");
   s = s.replace(JWT, "[REDACTED_JWT]");
   s = s.replace(AWS_ACCESS_KEY, "[REDACTED_KEY]");
+  s = s.replace(NEON_STORAGE_KEY, "[REDACTED_KEY]");
   s = s.replace(SIGNED_QUERY, "$1=[REDACTED]");
   s = s.replace(OAUTH_QUERY, "$1$2=[REDACTED]");
   s = s.replace(KEY_VALUE, "$1=[REDACTED]");

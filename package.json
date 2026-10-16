@@ -25,10 +25,13 @@
     "db:migrate": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/db-migrate.ts",
     "db:seed": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/db-seed.ts",
     "db:health": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/db-health.ts",
+    "storage:sweep": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/storage-sweep.ts",
     "test": "node scripts/run-tests.mjs",
     "test:ci": "node scripts/run-tests.mjs --fail-on-skip"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1152.0",
+    "@aws-sdk/s3-request-presigner": "3.1152.0",
     "@react-router/node": "^8.4.0",
     "@react-router/serve": "^8.4.0",
     "@vercel/functions": "^3.9.11",
