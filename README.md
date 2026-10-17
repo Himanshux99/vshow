@@ -2,6 +2,8 @@
 
 Campus digital signage media approval platform: committees submit media, Corporate Communication reviews it, and the Server Room Manager hands approved media to the signage software. Built with React Router (framework mode, SSR), TypeScript, Tailwind CSS, Drizzle ORM and PostgreSQL. Product and data-model specs are in [docs/](docs/).
 
+**New contributor? Start with [ONBOARDING.md](ONBOARDING.md)**: a short setup guide that needs no OAuth credentials.
+
 ## Quick start (clone to running app)
 
 Each step is a separate, explicit command. Nothing migrates or seeds automatically.
