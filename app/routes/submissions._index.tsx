@@ -1,7 +1,8 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/submissions._index";
 import { requireRole } from "../auth/authorize.server";
-import { AppHeader } from "../components/app-header";
+import { AppShell } from "../components/app-header";
+import { EmptyState, PageHeader } from "../components/ui";
 import { StatusBadge } from "../components/workflow-ui";
 import { listConvenerSubmissions } from "../submissions/queries.server";
 import { getRequestScope } from "../server/request-scope.server";
@@ -21,52 +22,65 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export default function Submissions({ loaderData }: Route.ComponentProps) {
   const { items, roles, canCreate } = loaderData;
   return (
-    <>
-      <AppHeader roles={roles} />
-      <main className="mx-auto max-w-4xl p-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">My submissions</h1>
-          {canCreate && (
-            <Link to="/submissions/new" className="rounded bg-black px-3 py-1.5 text-sm text-white">
+    <AppShell roles={roles}>
+      <PageHeader
+        eyebrow="Convener"
+        title="My submissions"
+        description="Media requests for the committees you belong to, and where each one stands."
+        actions={
+          canCreate && (
+            <Link to="/submissions/new" className="btn">
               New submission
             </Link>
-          )}
-        </div>
-        {items.length === 0 ? (
-          <p className="mt-6 text-sm text-gray-600">
-            No submissions yet for your committees.{canCreate ? " Start one with “New submission”." : ""}
-          </p>
-        ) : (
-          <table className="mt-6 w-full text-left text-sm">
+          )
+        }
+      />
+      {items.length === 0 ? (
+        <EmptyState
+          title="No submissions yet"
+          action={
+            canCreate && (
+              <Link to="/submissions/new" className="btn btn-ghost">
+                Start a submission
+              </Link>
+            )
+          }
+        >
+          Nothing has been created for your committees. Drafts stay private to your committee until you send them for
+          review.
+        </EmptyState>
+      ) : (
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Your submissions">
+          <table className="vtable">
             <thead>
-              <tr className="border-b">
-                <th className="py-2 pr-3">Reference</th>
-                <th className="py-2 pr-3">Title</th>
-                <th className="py-2 pr-3">Committee</th>
-                <th className="py-2 pr-3">Status</th>
-                <th className="py-2">Updated</th>
+              <tr>
+                <th scope="col">Reference</th>
+                <th scope="col">Title</th>
+                <th scope="col">Committee</th>
+                <th scope="col">Status</th>
+                <th scope="col">Updated</th>
               </tr>
             </thead>
             <tbody>
               {items.map((s) => (
-                <tr key={s.id} className="border-b">
-                  <td className="py-2 pr-3">
-                    <Link className="underline" to={`/submissions/${s.id}`}>
+                <tr key={s.id}>
+                  <td>
+                    <Link className="link mono tabular" to={`/submissions/${s.id}`}>
                       {s.referenceCode}
                     </Link>
                   </td>
-                  <td className="py-2 pr-3">{s.title}</td>
-                  <td className="py-2 pr-3">{s.committeeName}</td>
-                  <td className="py-2 pr-3">
+                  <td className="max-w-80 font-medium">{s.title}</td>
+                  <td className="text-dim">{s.committeeName}</td>
+                  <td>
                     <StatusBadge status={s.status} />
                   </td>
-                  <td className="py-2">{formatCampus(s.updatedAt)}</td>
+                  <td className="tabular whitespace-nowrap text-dim">{formatCampus(s.updatedAt)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </main>
-    </>
+        </div>
+      )}
+    </AppShell>
   );
 }

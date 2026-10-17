@@ -1,6 +1,7 @@
 import { Form } from "react-router";
 import type { Route } from "./+types/unclaimed";
 import { requireUnassigned } from "../auth/authorize.server";
+import { PublicHeader } from "../components/app-header";
 import { getRequestScope } from "../server/request-scope.server";
 
 export function meta(_args: Route.MetaArgs) {
@@ -15,17 +16,24 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export default function Unclaimed({ loaderData }: Route.ComponentProps) {
   return (
-    <main className="mx-auto max-w-md p-6 pt-16">
-      <h1 className="text-2xl font-semibold">Your access is not set up yet</h1>
-      <p className="mt-3 text-sm">
-        You are signed in as <strong>{loaderData.displayName}</strong> ({loaderData.email}), but a Vshow administrator
-        has not assigned you a role. Ask Corporate Communication to set up your access, then sign in again.
-      </p>
-      <Form method="post" action="/logout" className="mt-6">
-        <button type="submit" className="rounded border px-4 py-2">
-          Sign out
-        </button>
-      </Form>
-    </main>
+    <>
+      <PublicHeader action={<span />} />
+      <main id="main" tabIndex={-1} className="container-voss page outline-none">
+        <div className="mx-auto max-w-lg pt-10 md:pt-20">
+          <p className="eyebrow eyebrow-brand mb-3">No role assigned</p>
+          <h1 className="page-title">Your access isn’t set up yet</h1>
+          <p className="mt-4 text-dim">
+            You are signed in as <strong className="text-ink">{loaderData.displayName}</strong> (
+            <span className="break-all">{loaderData.email}</span>), but a Vshow administrator hasn’t assigned you a
+            role. Ask Corporate Communication to set up your access, then sign in again.
+          </p>
+          <Form method="post" action="/logout" className="mt-8">
+            <button type="submit" className="btn btn-ghost">
+              Sign out
+            </button>
+          </Form>
+        </div>
+      </main>
+    </>
   );
 }

@@ -4,6 +4,8 @@ import { Form, data } from "react-router";
 import type { Route } from "./+types/dev.login";
 import { handleDevLogin } from "../auth/dev-login.server";
 import { DEV_IDENTITY_KEYS } from "../auth/dev-switcher.server";
+import { PublicHeader } from "../components/app-header";
+import { Notice } from "../components/ui";
 import { getRequestScope } from "../server/request-scope.server";
 
 export function meta(_args: Route.MetaArgs) {
@@ -23,18 +25,24 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function DevLogin({ loaderData }: Route.ComponentProps) {
   return (
-    <main className="mx-auto max-w-md p-6 pt-16">
-      <h1 className="text-xl font-semibold">Development identity switcher</h1>
-      <p className="mt-2 text-sm text-yellow-800">
-        Local development only. These are seeded test identities; roles still come from the database.
-      </p>
-      <Form method="post" className="mt-4 flex flex-col gap-2">
-        {loaderData.identities.map((key) => (
-          <button key={key} type="submit" name="identity" value={key} className="rounded border px-3 py-2 text-left">
-            {key}
-          </button>
-        ))}
-      </Form>
-    </main>
+    <>
+      <PublicHeader action={<span />} />
+      <main id="main" tabIndex={-1} className="container-voss page outline-none">
+        <div className="mx-auto max-w-md pt-10">
+          <p className="eyebrow eyebrow-brand mb-3">Local development only</p>
+          <h1 className="page-title">Identity switcher</h1>
+          <div className="mt-4">
+            <Notice tone="warn">These are seeded test identities; roles still come from the database.</Notice>
+          </div>
+          <Form method="post" className="mt-6 flex flex-col gap-2">
+            {loaderData.identities.map((key) => (
+              <button key={key} type="submit" name="identity" value={key} className="btn btn-ghost mono justify-start">
+                {key}
+              </button>
+            ))}
+          </Form>
+        </div>
+      </main>
+    </>
   );
 }

@@ -1,14 +1,18 @@
 import { Form, Link, data, useActionData, useNavigation } from "react-router";
 import type { Route } from "./+types/submissions.$id";
 import { assertSameOrigin, requireRole } from "../auth/authorize.server";
-import { AppHeader } from "../components/app-header";
+import { AppShell } from "../components/app-header";
+import { Notice, PageHeader, Section } from "../components/ui";
 import { UploadPanel } from "../components/upload-panel";
 import { WindowsEditor } from "../components/windows-editor";
 import {
   AuditList,
   DecisionList,
   ErrorNotice,
+  RevisionList,
+  LiveBadge,
   StatusBadge,
+  SubmitButton,
   VersionList,
   WindowsTable,
 } from "../components/workflow-ui";
@@ -82,181 +86,174 @@ export default function SubmissionPage({ loaderData }: Route.ComponentProps) {
   const nav = useNavigation();
   const busy = nav.state !== "idle";
   const feedback = s.decisions.find((d) => d.comment && (s.status === "CHANGES_REQUESTED" || s.status === "REJECTED"));
-  const field = "mt-1 block w-full rounded border px-2 py-1.5";
 
   return (
-    <>
-      <AppHeader roles={roles} />
-      <main className="mx-auto max-w-4xl space-y-8 p-6">
-        <header>
-          <p className="text-sm text-gray-600">
-            <Link to="/submissions" className="underline">
+    <AppShell roles={roles}>
+      <PageHeader
+        back={{ to: "/submissions", label: "my submissions" }}
+        breadcrumb={
+          <>
+            <Link to="/submissions" className="link-quiet">
               My submissions
             </Link>{" "}
-            / {s.referenceCode}
-          </p>
-          <div className="mt-1 flex items-center gap-3">
-            <h1 className="text-2xl font-semibold">{s.title}</h1>
-            <StatusBadge status={s.status} />
-          </div>
-          <p className="mt-1 text-sm text-gray-600">
-            {s.committee.name} · created by {s.createdByName} · {formatCampus(s.createdAt)}
-          </p>
-          {s.resubmissionOf && (
-            <p className="mt-1 text-sm">
-              A resubmission of{" "}
-              <Link className="underline" to={`/submissions/${s.resubmissionOf.id}`}>
-                {s.resubmissionOf.referenceCode}
-              </Link>
-              . It has its own media and review history.
-            </p>
-          )}
-          {s.resubmittedAs.length > 0 && (
-            <p className="mt-1 text-sm">
-              Resubmitted as{" "}
-              {s.resubmittedAs.map((r) => (
-                <Link key={r.id} className="mr-2 underline" to={`/submissions/${r.id}`}>
-                  {r.referenceCode}
+            / <span className="tabular">{s.referenceCode}</span>
+          </>
+        }
+        title={s.title}
+        badge={
+          <>
+            <StatusBadge status={s.status} /> <LiveBadge live={s.liveOnScreens} />
+          </>
+        }
+        description={
+          <>
+            {s.committee.name} · created by {s.createdByName} ·{" "}
+            <span className="tabular">{formatCampus(s.createdAt)}</span>
+            {s.resubmissionOf && (
+              <span className="mt-1 block">
+                A resubmission of{" "}
+                <Link className="link" to={`/submissions/${s.resubmissionOf.id}`}>
+                  {s.resubmissionOf.referenceCode}
                 </Link>
-              ))}
-            </p>
-          )}
-        </header>
+                . It has its own media and review history.
+              </span>
+            )}
+            {s.resubmittedAs.length > 0 && (
+              <span className="mt-1 block">
+                Resubmitted as{" "}
+                {s.resubmittedAs.map((r) => (
+                  <Link key={r.id} className="link mr-3" to={`/submissions/${r.id}`}>
+                    {r.referenceCode}
+                  </Link>
+                ))}
+              </span>
+            )}
+          </>
+        }
+      />
 
+      <div className="space-y-4 empty:hidden">
         {result && result.ok === false && <ErrorNotice error={result.error} />}
         {result && result.ok && result.submitted && (
-          <p role="status" className="rounded border border-green-300 bg-green-50 p-3 text-sm">
-            Submitted for review. You can’t edit it while it is being reviewed.
-          </p>
+          <Notice tone="ok" title="Submitted for review">
+            You can’t edit it while it is being reviewed.
+          </Notice>
         )}
-        {result && result.ok && result.saved === false && (
-          <p role="status" className="text-sm">
-            Nothing had changed.
-          </p>
+        {result && result.ok && result.saved === true && !result.withdrawn && (
+          <Notice tone="ok" title="Changes saved" />
         )}
+        {result && result.ok && result.saved === false && <Notice tone="neutral" title="Nothing had changed" />}
         {result && result.ok && result.withdrawn && (
-          <p role="status" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+          <Notice tone="warn" title="Approval withdrawn">
             This submission was approved. Your change withdrew that approval: submit it again for a fresh review.
-          </p>
+          </Notice>
         )}
-
         {feedback && (
-          <section className="rounded border border-amber-300 bg-amber-50 p-4">
-            <h2 className="font-medium">
-              {s.status === "REJECTED" ? "Why it was rejected" : "Changes requested"} — {feedback.reviewerName}
-            </h2>
-            <p className="mt-1 whitespace-pre-wrap text-sm">{feedback.comment}</p>
+          <Notice
+            tone={s.status === "REJECTED" ? "danger" : "warn"}
+            title={`${s.status === "REJECTED" ? "Why it was rejected" : "Changes requested"} · ${feedback.reviewerName}`}
+          >
+            <p className="whitespace-pre-wrap">{feedback.comment}</p>
             {s.status === "REJECTED" && (
-              <p className="mt-2 text-sm">
+              <p className="mt-2 text-dim">
                 A rejected submission is closed and can’t be edited. A new, linked application can be started from it
                 later.
               </p>
             )}
-          </section>
+          </Notice>
         )}
-
         {s.status === "PENDING_REVIEW" && (
-          <p className="rounded border border-blue-300 bg-blue-50 p-3 text-sm">
-            This submission is waiting for Corporate Communication. It can’t be edited while it is pending.
-          </p>
+          <Notice tone="info" title="Waiting for Corporate Communication">
+            It can’t be edited while it is pending.
+          </Notice>
         )}
         {s.status === "APPROVED" && (
-          <p className="rounded border border-green-300 bg-green-50 p-3 text-sm">
-            Approved. Changing the title, description, windows or media withdraws the approval and needs a new review.
-          </p>
+          <Notice tone="ok" title="Approved">
+            Changing the title, description, windows or media withdraws the approval and needs a new review.
+          </Notice>
         )}
+      </div>
 
-        <section>
-          <h2 className="text-lg font-medium">Details and display windows</h2>
+      <div className="mt-10 space-y-14">
+        <Section id="details" title="Details and display windows">
           {s.canEdit ? (
-            <Form method="post" className="mt-3 space-y-4">
+            <Form method="post" className="space-y-6">
               <input type="hidden" name="intent" value="save" />
-              <label className="block text-sm">
-                Title
-                <input name="title" required maxLength={200} defaultValue={s.title} className={field} />
-              </label>
-              <label className="block text-sm">
-                Description
+              <div>
+                <label htmlFor="title" className="label">
+                  Title
+                </label>
+                <input id="title" name="title" required maxLength={200} defaultValue={s.title} className="field" />
+              </div>
+              <div>
+                <label htmlFor="description" className="label">
+                  Description
+                </label>
                 <textarea
+                  id="description"
                   name="description"
                   rows={4}
                   maxLength={5000}
                   defaultValue={s.description ?? ""}
-                  className={field}
+                  className="field"
                 />
-              </label>
-              <WindowsEditor screens={screens} initial={s.windows} maxWindows={limits.maxWindows} />
-              <button type="submit" disabled={busy} className="rounded border px-4 py-2 disabled:opacity-50">
+              </div>
+              <div>
+                <p className="label">Requested display windows</p>
+                <WindowsEditor screens={screens} initial={s.windows} maxWindows={limits.maxWindows} />
+              </div>
+              <SubmitButton className="btn btn-ghost" pending="Saving…">
                 Save changes
-              </button>
+              </SubmitButton>
             </Form>
           ) : (
-            <div className="mt-3 space-y-3">
-              {s.description && <p className="whitespace-pre-wrap text-sm">{s.description}</p>}
+            <div className="space-y-6">
+              {s.description && <p className="max-w-170 whitespace-pre-wrap">{s.description}</p>}
               <WindowsTable windows={s.windows} />
             </div>
           )}
-        </section>
+        </Section>
 
-        <section>
-          <h2 className="text-lg font-medium">Media</h2>
-          <div className="mt-3 space-y-4">
+        <Section id="media" title="Media">
+          <div className="space-y-6">
             <VersionList submissionId={s.id} versions={s.versions} />
             {s.canEdit &&
               (storageReady ? (
                 <UploadPanel submissionId={s.id} maxBytes={limits.maxBytes} disabled={busy} />
               ) : (
-                <p className="rounded border border-yellow-300 bg-yellow-50 p-3 text-sm">
-                  Media storage is not available right now, so new media can’t be uploaded.
-                </p>
+                <Notice tone="warn" title="Media storage unavailable">
+                  New media can’t be uploaded right now.
+                </Notice>
               ))}
           </div>
-        </section>
+        </Section>
 
         {s.canSubmit && (
-          <section>
-            <h2 className="text-lg font-medium">Send for review</h2>
-            <p className="mt-1 text-sm text-gray-600">
-              Needs uploaded media and at least one display window starting in the future. Save your changes first.
-            </p>
-            <Form method="post" className="mt-3">
+          <Section
+            id="submit"
+            title="Send for review"
+            description="Needs uploaded media and at least one display window starting in the future. Save your changes first."
+          >
+            <Form method="post">
               <input type="hidden" name="intent" value="submit" />
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-              >
+              <SubmitButton className="btn btn-lg" pending="Submitting…">
                 Submit for review
-              </button>
+              </SubmitButton>
             </Form>
-          </section>
+          </Section>
         )}
 
-        <section>
-          <h2 className="text-lg font-medium">Review history</h2>
-          <div className="mt-3 space-y-4">
+        <Section id="history" title="Review history">
+          <div className="space-y-8">
             <DecisionList decisions={s.decisions} />
-            {s.revisions.length > 0 && (
-              <ul className="space-y-1 text-sm">
-                {s.revisions.map((r) => (
-                  <li key={r.id}>
-                    Revision {r.revisionNumber} — “{r.title}”, {r.windows.length} window
-                    {r.windows.length === 1 ? "" : "s"}, {formatCampus(r.createdAt)}
-                    {r.isCurrent ? " (current)" : ""}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <RevisionList revisions={s.revisions} />
           </div>
-        </section>
+        </Section>
 
-        <section>
-          <h2 className="text-lg font-medium">Activity</h2>
-          <div className="mt-3">
-            <AuditList events={s.audit} />
-          </div>
-        </section>
-      </main>
-    </>
+        <Section id="activity" title="Activity">
+          <AuditList events={s.audit} />
+        </Section>
+      </div>
+    </AppShell>
   );
 }

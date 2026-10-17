@@ -1,8 +1,9 @@
-import { Form, redirect, useActionData } from "react-router";
+import { Form, Link, redirect, useActionData } from "react-router";
 import type { Route } from "./+types/submissions.new";
 import { assertSameOrigin, requireRole } from "../auth/authorize.server";
-import { AppHeader } from "../components/app-header";
-import { ErrorNotice } from "../components/workflow-ui";
+import { AppShell } from "../components/app-header";
+import { Notice, PageHeader } from "../components/ui";
+import { ErrorNotice, SubmitButton } from "../components/workflow-ui";
 import { getRequestScope } from "../server/request-scope.server";
 import { actionFailure, type ActionFailure } from "../submissions/http.server";
 import { createDraft, listManageableCommittees } from "../submissions/submissions.server";
@@ -37,53 +38,71 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function NewSubmission({ loaderData }: Route.ComponentProps) {
   const failure = useActionData<ActionFailure>();
   const { committees, roles } = loaderData;
-  const field = "mt-1 block w-full rounded border px-2 py-1.5";
   return (
-    <>
-      <AppHeader roles={roles} />
-      <main className="mx-auto max-w-xl p-6">
-        <h1 className="text-2xl font-semibold">New submission</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          You will add the media, screens and display windows on the next page. Nothing is sent for review until you
-          submit it.
-        </p>
-        {committees.length === 0 ? (
-          <p className="mt-6 text-sm">You are not an active member of any committee that can submit media.</p>
-        ) : (
-          <Form method="post" className="mt-6 space-y-4">
-            <ErrorNotice error={failure?.error} />
-            <label className="block text-sm">
+    <AppShell roles={roles} narrow>
+      <PageHeader
+        back={{ to: "/submissions", label: "my submissions" }}
+        breadcrumb={
+          <>
+            <Link to="/submissions" className="link-quiet">
+              My submissions
+            </Link>{" "}
+            / New
+          </>
+        }
+        title="New submission"
+        description="You’ll add the media, screens and display windows on the next page. Nothing is sent for review until you submit it."
+      />
+      {committees.length === 0 ? (
+        <Notice tone="warn" title="No committee available">
+          You are not an active member of any committee that can submit media.
+        </Notice>
+      ) : (
+        <Form method="post" className="space-y-6">
+          <ErrorNotice error={failure?.error} />
+          <div>
+            <label htmlFor="committeeId" className="label">
               Committee
-              <select
-                name="committeeId"
-                required
-                className={field}
-                defaultValue={committees.length === 1 ? committees[0].id : ""}
-              >
-                <option value="" disabled>
-                  Choose a committee…
+            </label>
+            <select
+              id="committeeId"
+              name="committeeId"
+              required
+              className="field"
+              defaultValue={committees.length === 1 ? committees[0].id : ""}
+            >
+              <option value="" disabled>
+                Choose a committee…
+              </option>
+              {committees.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
                 </option>
-                {committees.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="title" className="label">
               Title
-              <input name="title" required maxLength={200} className={field} />
             </label>
-            <label className="block text-sm">
+            <input id="title" name="title" required maxLength={200} className="field" />
+            <p className="hint">Up to 200 characters. Reviewers see this exact title.</p>
+          </div>
+          <div>
+            <label htmlFor="description" className="label">
               Description (optional)
-              <textarea name="description" rows={4} maxLength={5000} className={field} />
             </label>
-            <button type="submit" className="rounded bg-black px-4 py-2 text-white">
-              Create draft
-            </button>
-          </Form>
-        )}
-      </main>
-    </>
+            <textarea id="description" name="description" rows={4} maxLength={5000} className="field" />
+            <p className="hint">Up to 5,000 characters.</p>
+          </div>
+          <div className="flex flex-wrap gap-3 pt-2">
+            <SubmitButton pending="Creating draft…">Create draft</SubmitButton>
+            <Link to="/submissions" className="btn btn-ghost">
+              Cancel
+            </Link>
+          </div>
+        </Form>
+      )}
+    </AppShell>
   );
 }

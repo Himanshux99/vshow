@@ -1,7 +1,8 @@
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import type { Route } from "./+types/review._index";
 import { requireRole } from "../auth/authorize.server";
-import { AppHeader } from "../components/app-header";
+import { AppShell } from "../components/app-header";
+import { EmptyState, PageHeader, Section } from "../components/ui";
 import { StatusBadge } from "../components/workflow-ui";
 import { getRequestScope } from "../server/request-scope.server";
 import { listReviewQueue, type ListItem } from "../submissions/queries.server";
@@ -18,61 +19,66 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { roles: user.roles, ...queue };
 }
 
-function Table({ items, empty }: { items: ListItem[]; empty: string }) {
-  if (items.length === 0) return <p className="mt-3 text-sm text-gray-600">{empty}</p>;
+function Table({ items, empty, label }: { items: ListItem[]; empty: string; label: string }) {
+  const navigate = useNavigate();
+  if (items.length === 0) return <EmptyState title={empty} />;
+  const showSubmitted = items.some((s) => s.status === "PENDING_REVIEW");
   return (
-    <table className="mt-3 w-full text-left text-sm">
-      <thead>
-        <tr className="border-b">
-          <th className="py-2 pr-3">Reference</th>
-          <th className="py-2 pr-3">Title</th>
-          <th className="py-2 pr-3">Committee</th>
-          <th className="py-2 pr-3">Submitted by</th>
-          <th className="py-2 pr-3">Status</th>
-          <th className="py-2">{items[0]?.status === "PENDING_REVIEW" ? "Submitted" : "Updated"}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((s) => (
-          <tr key={s.id} className="border-b">
-            <td className="py-2 pr-3">
-              <Link className="underline" to={`/review/${s.id}`}>
-                {s.referenceCode}
-              </Link>
-            </td>
-            <td className="py-2 pr-3">{s.title}</td>
-            <td className="py-2 pr-3">{s.committeeName}</td>
-            <td className="py-2 pr-3">{s.createdByName}</td>
-            <td className="py-2 pr-3">
-              <StatusBadge status={s.status} />
-            </td>
-            <td className="py-2">
-              {formatCampus(s.status === "PENDING_REVIEW" ? (s.submittedAt ?? s.updatedAt) : s.updatedAt)}
-            </td>
+    <div className="table-wrap" tabIndex={0} role="region" aria-label={label}>
+      <table className="vtable">
+        <thead>
+          <tr>
+            <th scope="col">Title</th>
+            <th scope="col">Committee</th>
+            <th scope="col">Submitted by</th>
+            <th scope="col">Status</th>
+            {showSubmitted && <th scope="col">Submitted</th>}
+            <th scope="col">Updated</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {items.map((s) => (
+            <tr key={s.id} className="cursor-pointer" onClick={() => navigate(`/review/${s.id}`)}>
+              <td className="max-w-80 font-medium">
+                <Link className="link" to={`/review/${s.id}`} onClick={(e) => e.stopPropagation()}>
+                  {s.title}
+                </Link>
+              </td>
+              <td className="text-dim">{s.committeeName}</td>
+              <td className="text-dim">{s.createdByName}</td>
+              <td>
+                <StatusBadge status={s.status} />
+              </td>
+              {showSubmitted && (
+                <td className="tabular whitespace-nowrap text-dim">
+                  {s.submittedAt ? formatCampus(s.submittedAt) : "—"}
+                </td>
+              )}
+              <td className="tabular whitespace-nowrap text-dim">{formatCampus(s.updatedAt)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 export default function ReviewQueue({ loaderData }: Route.ComponentProps) {
   return (
-    <>
-      <AppHeader roles={loaderData.roles} />
-      <main className="mx-auto max-w-4xl space-y-10 p-6">
-        <section>
-          <h1 className="text-2xl font-semibold">Review queue</h1>
-          <p className="text-sm text-gray-600">
-            Submissions waiting for a decision, oldest first. Drafts are never shown.
-          </p>
-          <Table items={loaderData.pending} empty="Nothing is waiting for review." />
-        </section>
-        <section>
-          <h2 className="text-lg font-medium">Recently decided</h2>
-          <Table items={loaderData.decided} empty="No decided submissions yet." />
-        </section>
-      </main>
-    </>
+    <AppShell roles={loaderData.roles}>
+      <PageHeader
+        eyebrow="Corporate Communication"
+        title="Review queue"
+        description="Submissions waiting for a decision, oldest first. Drafts are never shown."
+      />
+      <div className="space-y-14">
+        <Section id="pending" title={`Pending (${loaderData.pending.length})`}>
+          <Table items={loaderData.pending} empty="Nothing is waiting for review." label="Pending submissions" />
+        </Section>
+        <Section id="decided" title="Recently decided">
+          <Table items={loaderData.decided} empty="No decided submissions yet." label="Recently decided submissions" />
+        </Section>
+      </div>
+    </AppShell>
   );
 }

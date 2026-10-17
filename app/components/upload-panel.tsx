@@ -5,6 +5,7 @@
 import { useRef, useState } from "react";
 import { useRevalidator } from "react-router";
 import { MEDIA_TYPES } from "../storage/file-types.ts";
+import { Spinner } from "./ui.tsx";
 import { formatBytes } from "./workflow-ui.tsx";
 
 interface ApiFailure {
@@ -102,35 +103,41 @@ export function UploadPanel({
     }
   }
 
+  const working = state.phase === "working";
   return (
-    <div>
+    <div className="panel">
+      <label htmlFor={`media-${submissionId}`} className="label">
+        Media file
+      </label>
       <input
+        id={`media-${submissionId}`}
         ref={input}
         type="file"
         accept={accept}
-        disabled={disabled || state.phase === "working"}
-        className="block text-sm"
+        disabled={disabled || working}
+        aria-describedby={`media-hint-${submissionId}`}
+        className="field cursor-pointer file:mr-4 file:cursor-pointer file:rounded-sm file:border-0 file:bg-codebg file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink"
       />
-      <button
-        type="button"
-        onClick={start}
-        disabled={disabled || state.phase === "working"}
-        className="mt-2 rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-50"
-      >
-        Upload new version
-      </button>
-      <p className="mt-1 text-xs text-gray-600">
+      <p id={`media-hint-${submissionId}`} className="hint">
         JPEG, PNG, WebP or MP4, up to {formatBytes(maxBytes)}. Uploading new media after approval requires approval
         again.
       </p>
-      {state.message && (
-        <p
-          role={state.phase === "error" ? "alert" : "status"}
-          className={`mt-2 text-sm ${state.phase === "error" ? "text-red-800" : ""}`}
-        >
-          {state.message}
-        </p>
-      )}
+      <div className="mt-4 flex flex-wrap items-center gap-4">
+        <button type="button" onClick={start} disabled={disabled || working} className="btn">
+          {working && <Spinner />}
+          {working ? "Uploading…" : "Upload new version"}
+        </button>
+        {state.message && (
+          <p
+            role={state.phase === "error" ? "alert" : "status"}
+            className={`text-sm ${state.phase === "error" ? "text-danger" : "text-dim"}`}
+          >
+            {state.phase === "error" && <span aria-hidden="true">✕ </span>}
+            {state.phase === "done" && <span aria-hidden="true">✓ </span>}
+            {state.message}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

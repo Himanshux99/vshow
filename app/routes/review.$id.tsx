@@ -1,12 +1,16 @@
-import { Form, Link, redirect, useActionData, useNavigation } from "react-router";
+import { Form, Link, redirect, useActionData } from "react-router";
 import type { Route } from "./+types/review.$id";
 import { assertSameOrigin, requireRole } from "../auth/authorize.server";
-import { AppHeader } from "../components/app-header";
+import { AppShell } from "../components/app-header";
+import { Notice, PageHeader, Section } from "../components/ui";
 import {
   AuditList,
   DecisionList,
   ErrorNotice,
+  LiveBadge,
+  RevisionList,
   StatusBadge,
+  SubmitButton,
   VersionList,
   WindowsTable,
 } from "../components/workflow-ui";
@@ -48,129 +52,131 @@ export async function action({ request, context, params }: Route.ActionArgs) {
   }
 }
 
+const DECISIONS = [
+  { value: "APPROVED", label: "Approve this revision", hint: "Clears this exact revision for manager handoff." },
+  {
+    value: "CHANGES_REQUESTED",
+    label: "Request changes",
+    hint: "A comment is required. The convener can upload a new version.",
+  },
+  { value: "REJECTED", label: "Reject", hint: "A reason is required. A rejected submission is closed." },
+];
+
 export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   const { submission: s, roles } = loaderData;
   const failure = useActionData<ActionFailure>();
-  const busy = useNavigation().state !== "idle";
   const rev = s.currentRevision;
   return (
-    <>
-      <AppHeader roles={roles} />
-      <main className="mx-auto max-w-4xl space-y-8 p-6">
-        <header>
-          <p className="text-sm text-gray-600">
-            <Link to="/review" className="underline">
+    <AppShell roles={roles}>
+      <PageHeader
+        back={{ to: "/review", label: "review queue" }}
+        breadcrumb={
+          <>
+            <Link to="/review" className="link-quiet">
               Review queue
             </Link>{" "}
-            / {s.referenceCode}
-          </p>
-          <div className="mt-1 flex items-center gap-3">
-            <h1 className="text-2xl font-semibold">{rev?.title ?? s.title}</h1>
-            <StatusBadge status={s.status} />
-          </div>
-          <p className="mt-1 text-sm text-gray-600">
+            / <span className="tabular">{s.referenceCode}</span>
+          </>
+        }
+        title={rev?.title ?? s.title}
+        badge={
+          <>
+            <StatusBadge status={s.status} /> <LiveBadge live={s.liveOnScreens} />
+          </>
+        }
+        description={
+          <>
             {s.committee.name} · submitted by {s.createdByName}
-            {s.submittedAt ? ` · ${formatCampus(s.submittedAt)}` : ""}
-          </p>
-          {s.resubmissionOf && (
-            <p className="mt-1 text-sm">
-              A resubmission of{" "}
-              <Link className="underline" to={`/review/${s.resubmissionOf.id}`}>
-                {s.resubmissionOf.referenceCode}
-              </Link>{" "}
-              (a previously rejected application). It starts with no approval of its own.
-            </p>
+            {s.submittedAt ? <span className="tabular"> · {formatCampus(s.submittedAt)}</span> : ""}
+            {s.resubmissionOf && (
+              <span className="mt-1 block">
+                A resubmission of{" "}
+                <Link className="link" to={`/review/${s.resubmissionOf.id}`}>
+                  {s.resubmissionOf.referenceCode}
+                </Link>{" "}
+                (a previously rejected application). It starts with no approval of its own.
+              </span>
+            )}
+          </>
+        }
+      />
+
+      <div className="grid gap-14 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-16">
+        <div className="min-w-0 space-y-14">
+          {rev ? (
+            <Section
+              id="revision"
+              title={`Revision ${rev.revisionNumber} ${s.status === "PENDING_REVIEW" ? "· up for review" : "· latest"}`}
+              description="This is exactly what a decision applies to."
+            >
+              <div className="space-y-8">
+                {rev.description && <p className="max-w-170 whitespace-pre-wrap">{rev.description}</p>}
+                <div>
+                  <h3 className="eyebrow mb-3">Requested display windows</h3>
+                  <WindowsTable windows={rev.windows} />
+                </div>
+                <div>
+                  <h3 className="eyebrow mb-3">Media</h3>
+                  <VersionList submissionId={s.id} versions={s.versions.filter((v) => v.id === rev.mediaVersionId)} />
+                </div>
+              </div>
+            </Section>
+          ) : (
+            <Notice tone="neutral">No revision has been submitted.</Notice>
           )}
-        </header>
 
-        {rev ? (
-          <section>
-            <h2 className="text-lg font-medium">
-              Revision {rev.revisionNumber} {s.status === "PENDING_REVIEW" ? "— up for review" : "— latest"}
-            </h2>
-            <p className="text-sm text-gray-600">This is exactly what a decision applies to.</p>
-            {rev.description && <p className="mt-3 whitespace-pre-wrap text-sm">{rev.description}</p>}
-            <div className="mt-4">
-              <h3 className="text-sm font-medium">Requested display windows</h3>
-              <WindowsTable windows={rev.windows} />
+          <Section id="history" title="Earlier revisions and decisions">
+            <div className="space-y-8">
+              <DecisionList decisions={s.decisions} />
+              <RevisionList revisions={s.revisions.filter((r) => !r.isCurrent)} />
             </div>
-            <div className="mt-4">
-              <h3 className="text-sm font-medium">Media</h3>
-              <VersionList submissionId={s.id} versions={s.versions.filter((v) => v.id === rev.mediaVersionId)} />
-            </div>
-          </section>
-        ) : (
-          <p className="text-sm">No revision has been submitted.</p>
-        )}
+          </Section>
 
-        {s.canDecide && rev ? (
-          <section className="rounded border p-4">
-            <h2 className="text-lg font-medium">Your decision</h2>
-            <ErrorNotice error={failure?.error} />
-            <Form method="post" className="mt-3 space-y-3">
-              <input type="hidden" name="revisionId" value={rev.id} />
-              <fieldset className="space-y-1 text-sm">
-                <legend className="sr-only">Decision</legend>
-                <label className="block">
-                  <input type="radio" name="decision" value="APPROVED" required /> Approve this revision
-                </label>
-                <label className="block">
-                  <input type="radio" name="decision" value="CHANGES_REQUESTED" /> Request changes (comment required)
-                </label>
-                <label className="block">
-                  <input type="radio" name="decision" value="REJECTED" /> Reject (reason required)
-                </label>
-              </fieldset>
-              <label className="block text-sm">
-                Comment or reason
-                <textarea
-                  name="comment"
-                  rows={4}
-                  maxLength={2000}
-                  className="mt-1 block w-full rounded border px-2 py-1.5"
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-              >
-                Record decision
-              </button>
-            </Form>
-          </section>
-        ) : (
-          s.status === "PENDING_REVIEW" && (
-            <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
-              You can’t decide on a submission you created. Another reviewer must review it.
-            </p>
-          )
-        )}
-
-        <section>
-          <h2 className="text-lg font-medium">Earlier revisions and decisions</h2>
-          <div className="mt-3 space-y-4">
-            <DecisionList decisions={s.decisions} />
-            <ul className="space-y-1 text-sm">
-              {s.revisions
-                .filter((r) => !r.isCurrent)
-                .map((r) => (
-                  <li key={r.id}>
-                    Revision {r.revisionNumber} — “{r.title}”, {r.windows.length} window
-                    {r.windows.length === 1 ? "" : "s"}, {formatCampus(r.createdAt)}
-                  </li>
-                ))}
-            </ul>
-          </div>
-        </section>
-
-        <section>
-          <h2 className="text-lg font-medium">Activity</h2>
-          <div className="mt-3">
+          <Section id="activity" title="Activity">
             <AuditList events={s.audit} />
-          </div>
-        </section>
-      </main>
-    </>
+          </Section>
+        </div>
+
+        <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start" aria-label="Decision">
+          {s.canDecide && rev ? (
+            <div className="panel">
+              <h2 className="text-xl font-semibold tracking-tight">Your decision</h2>
+              <ErrorNotice error={failure?.error} />
+              <Form method="post" className="mt-5 space-y-5">
+                <input type="hidden" name="revisionId" value={rev.id} />
+                <fieldset className="m-0 space-y-2 border-0 p-0">
+                  <legend className="sr-only">Decision</legend>
+                  {DECISIONS.map((d, i) => (
+                    <label key={d.value} className="choice">
+                      <input type="radio" name="decision" value={d.value} required={i === 0} />
+                      <span>
+                        <span className="block font-medium">{d.label}</span>
+                        <span className="block text-sm text-dim">{d.hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
+                <div>
+                  <label htmlFor="comment" className="label">
+                    Comment or reason
+                  </label>
+                  <textarea id="comment" name="comment" rows={4} maxLength={2000} className="field" />
+                  <p className="hint">Up to 2,000 characters. Shown to the convener.</p>
+                </div>
+                <SubmitButton className="btn w-full" pending="Recording…">
+                  Record decision
+                </SubmitButton>
+              </Form>
+            </div>
+          ) : (
+            s.status === "PENDING_REVIEW" && (
+              <Notice tone="warn" title="You can’t decide on this one">
+                You created this submission. Another reviewer must review it.
+              </Notice>
+            )
+          )}
+        </aside>
+      </div>
+    </AppShell>
   );
 }

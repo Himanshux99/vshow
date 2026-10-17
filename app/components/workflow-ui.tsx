@@ -1,28 +1,59 @@
 // Small presentational pieces shared by the convener and reviewer pages. No data access here.
 import { formatCampus } from "../submissions/time.ts";
-import type { AuditView, DecisionView, VersionView, WindowView } from "../submissions/queries.server.ts";
+import type { AuditView, DecisionView, RevisionView, VersionView, WindowView } from "../submissions/queries.server.ts";
+import { useNavigation } from "react-router";
+import { Notice, Spinner } from "./ui.tsx";
 
-const STATUS_STYLE: Record<string, string> = {
-  DRAFT: "bg-gray-100 text-gray-800",
-  PENDING_REVIEW: "bg-blue-100 text-blue-900",
-  CHANGES_REQUESTED: "bg-amber-100 text-amber-900",
-  APPROVED: "bg-green-100 text-green-900",
-  REJECTED: "bg-red-100 text-red-900",
-  CANCELLED: "bg-gray-200 text-gray-700",
-};
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Draft",
-  PENDING_REVIEW: "Pending review",
-  CHANGES_REQUESTED: "Changes requested",
-  APPROVED: "Approved",
-  REJECTED: "Rejected",
-  CANCELLED: "Cancelled",
-};
-
-export function StatusBadge({ status }: { status: string }) {
+/** Submit button that disables itself and shows progress while the router is navigating/submitting. */
+export function SubmitButton({
+  children,
+  pending = "Saving…",
+  className = "btn",
+  name,
+  value,
+}: {
+  children: React.ReactNode;
+  pending?: string;
+  className?: string;
+  name?: string;
+  value?: string;
+}) {
+  const busy = useNavigation().state !== "idle";
   return (
-    <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[status] ?? STATUS_STYLE.DRAFT}`}>
-      {STATUS_LABEL[status] ?? status}
+    <button type="submit" name={name} value={value} disabled={busy} className={className} aria-busy={busy}>
+      {busy && <Spinner />}
+      {busy ? pending : children}
+    </button>
+  );
+}
+
+const STATUS: Record<string, { label: string; tone: "ok" | "warn" | "danger" | "info" | "neutral"; icon: string }> = {
+  DRAFT: { label: "Draft", tone: "neutral", icon: "○" },
+  PENDING_REVIEW: { label: "Pending review", tone: "info", icon: "◔" },
+  CHANGES_REQUESTED: { label: "Changes requested", tone: "warn", icon: "!" },
+  APPROVED: { label: "Approved", tone: "ok", icon: "✓" },
+  REJECTED: { label: "Rejected", tone: "danger", icon: "✕" },
+  CANCELLED: { label: "Cancelled", tone: "neutral", icon: "–" },
+};
+
+/** Shown once the Server Room Manager has put the approved media on the screens. */
+export function LiveBadge({ live }: { live: { at: string; byName: string } | null }) {
+  if (!live) return null;
+  return (
+    <span className="badge" data-tone="ok" title={`Put on screens by ${live.byName}, ${formatCampus(live.at)}`}>
+      <span aria-hidden="true">●</span>
+      Live on screens
+    </span>
+  );
+}
+
+/** Status is always text plus an icon, never color alone. */
+export function StatusBadge({ status }: { status: string }) {
+  const s = STATUS[status] ?? STATUS.DRAFT;
+  return (
+    <span className="badge" data-tone={s.tone === "neutral" ? undefined : s.tone}>
+      <span aria-hidden="true">{s.icon}</span>
+      {STATUS[status]?.label ?? status}
     </span>
   );
 }
@@ -37,64 +68,80 @@ export function ErrorNotice({
 }) {
   if (!error) return null;
   return (
-    <div role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900">
-      <p>{error.message}</p>
-      {error.issues && error.issues.length > 0 && (
-        <ul className="mt-1 list-disc pl-5">
-          {error.issues.map((i, n) => (
-            <li key={`${i.path}-${i.code}-${n}`}>
-              {i.path || "form"}: {i.code.replaceAll("_", " ")}
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="mb-6">
+      <Notice tone="danger" title={error.message} role="alert">
+        {error.issues && error.issues.length > 0 && (
+          <ul className="mt-1 list-disc pl-5">
+            {error.issues.map((i, n) => (
+              <li key={`${i.path}-${i.code}-${n}`}>
+                {i.path || "form"}: {i.code.replaceAll("_", " ")}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Notice>
     </div>
   );
 }
 
+const Muted = ({ children }: { children: React.ReactNode }) => <p className="text-dim">{children}</p>;
+
 export function WindowsTable({ windows }: { windows: WindowView[] }) {
-  if (windows.length === 0) return <p className="text-sm text-gray-600">No display windows requested.</p>;
+  if (windows.length === 0) return <Muted>No display windows requested.</Muted>;
   return (
-    <table className="w-full text-left text-sm">
-      <thead>
-        <tr className="border-b">
-          <th className="py-1 pr-3">Screen</th>
-          <th className="py-1 pr-3">From</th>
-          <th className="py-1 pr-3">Until</th>
-          <th className="py-1">Note</th>
-        </tr>
-      </thead>
-      <tbody>
-        {windows.map((w, i) => (
-          <tr key={`${w.screenId}-${w.slotNumber}-${i}`} className="border-b">
-            <td className="py-1 pr-3">
-              {w.screenName}
-              {w.slotNumber > 1 ? ` (#${w.slotNumber})` : ""}
-            </td>
-            <td className="py-1 pr-3">{w.startAt ? formatCampus(w.startAt) : "—"}</td>
-            <td className="py-1 pr-3">{w.endAt ? formatCampus(w.endAt) : "—"}</td>
-            <td className="py-1">{w.note ?? ""}</td>
+    <div className="table-wrap" tabIndex={0} role="region" aria-label="Requested display windows">
+      <table className="vtable">
+        <thead>
+          <tr>
+            <th scope="col">Screen</th>
+            <th scope="col">From (IST)</th>
+            <th scope="col">Until (IST)</th>
+            <th scope="col">Note</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {windows.map((w, i) => (
+            <tr key={`${w.screenId}-${w.slotNumber}-${i}`}>
+              <td className="font-medium">
+                {w.screenName}
+                {w.slotNumber > 1 ? <span className="mono text-dim"> #{w.slotNumber}</span> : null}
+              </td>
+              <td className="tabular">{w.startAt ? formatCampus(w.startAt) : "—"}</td>
+              <td className="tabular">{w.endAt ? formatCampus(w.endAt) : "—"}</td>
+              <td className="text-dim">{w.note ?? ""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 export function VersionList({ submissionId, versions }: { submissionId: string; versions: VersionView[] }) {
-  if (versions.length === 0) return <p className="text-sm text-gray-600">No media uploaded yet.</p>;
+  if (versions.length === 0) return <Muted>No media uploaded yet.</Muted>;
   return (
-    <ul className="space-y-1 text-sm">
+    <ul className="m-0 list-none border-t border-line p-0">
       {versions.map((v) => (
-        <li key={v.id} className="flex flex-wrap items-baseline gap-x-3">
-          <span className="font-medium">Version {v.versionNumber}</span>
-          {v.isCurrent && <span className="rounded bg-gray-100 px-1.5 text-xs">current</span>}
-          <span>{v.originalFilename}</span>
-          <span className="text-gray-600">
-            {v.contentType}, {formatBytes(v.sizeBytes)}, {formatCampus(v.uploadedAt)}
-          </span>
-          <a className="underline" href={`/submissions/${submissionId}/versions/${v.id}/file`}>
-            Download
+        <li
+          key={v.id}
+          className="grid items-baseline gap-x-6 gap-y-1 border-b border-line py-4 sm:grid-cols-[120px_1fr_auto]"
+        >
+          <div className="flex items-center gap-2">
+            <span className="mono text-sm font-medium">v{v.versionNumber}</span>
+            {v.isCurrent && (
+              <span className="badge" data-tone="ok">
+                Current
+              </span>
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="break-all font-medium">{v.originalFilename}</p>
+            <p className="tabular mt-0.5 text-sm text-dim">
+              {v.contentType} · {formatBytes(v.sizeBytes)} · {formatCampus(v.uploadedAt)}
+            </p>
+          </div>
+          <a className="link" href={`/submissions/${submissionId}/versions/${v.id}/file`}>
+            Download<span className="sr-only"> version {v.versionNumber}</span> ↗
           </a>
         </li>
       ))}
@@ -102,17 +149,33 @@ export function VersionList({ submissionId, versions }: { submissionId: string; 
   );
 }
 
+const DECISION_TONE: Record<string, "ok" | "warn" | "danger"> = {
+  APPROVED: "ok",
+  CHANGES_REQUESTED: "warn",
+  REJECTED: "danger",
+};
+const DECISION_LABEL: Record<string, string> = {
+  APPROVED: "Approved",
+  CHANGES_REQUESTED: "Changes requested",
+  REJECTED: "Rejected",
+};
+
 export function DecisionList({ decisions }: { decisions: DecisionView[] }) {
-  if (decisions.length === 0) return <p className="text-sm text-gray-600">No review decisions yet.</p>;
+  if (decisions.length === 0) return <Muted>No review decisions yet.</Muted>;
   return (
-    <ul className="space-y-2 text-sm">
+    <ul className="m-0 list-none border-t border-line p-0">
       {decisions.map((d) => (
-        <li key={d.id} className="rounded border p-2">
-          <p>
-            <strong>{d.decision.replaceAll("_", " ").toLowerCase()}</strong> on revision {d.revisionNumber} by{" "}
-            {d.reviewerName}, {formatCampus(d.createdAt)}
-          </p>
-          {d.comment && <p className="mt-1 whitespace-pre-wrap">{d.comment}</p>}
+        <li key={d.id} className="border-b border-line py-4">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="badge" data-tone={DECISION_TONE[d.decision]}>
+              {DECISION_LABEL[d.decision] ?? d.decision.replaceAll("_", " ").toLowerCase()}
+            </span>
+            <span className="text-sm text-dim">
+              Revision {d.revisionNumber} · {d.reviewerName} ·{" "}
+              <span className="tabular">{formatCampus(d.createdAt)}</span>
+            </span>
+          </div>
+          {d.comment && <p className="mt-3 max-w-170 whitespace-pre-wrap">{d.comment}</p>}
         </li>
       ))}
     </ul>
@@ -120,14 +183,40 @@ export function DecisionList({ decisions }: { decisions: DecisionView[] }) {
 }
 
 export function AuditList({ events }: { events: AuditView[] }) {
+  if (events.length === 0) return <Muted>No activity recorded.</Muted>;
   return (
-    <ul className="space-y-1 text-sm">
+    <ol className="timeline">
       {events.map((e) => (
         <li key={e.id}>
-          {formatCampus(e.createdAt)} — {e.action.replaceAll("_", " ").toLowerCase()}
-          {e.actorName ? ` by ${e.actorName}` : ""}
+          <time className="mono tabular text-xs text-dim">{formatCampus(e.createdAt)}</time>
+          <span>
+            <span className="capitalize">{e.action.replaceAll("_", " ").toLowerCase()}</span>
+            {e.actorName ? <span className="text-dim"> · {e.actorName}</span> : null}
+          </span>
         </li>
       ))}
-    </ul>
+    </ol>
+  );
+}
+
+/** One-line history of submitted revisions. */
+export function RevisionList({ revisions }: { revisions: RevisionView[] }) {
+  if (revisions.length === 0) return null;
+  return (
+    <ol className="timeline">
+      {revisions.map((r) => (
+        <li key={r.id}>
+          <time className="mono tabular text-xs text-dim">{formatCampus(r.createdAt)}</time>
+          <span>
+            <span className="font-medium">Revision {r.revisionNumber}</span>
+            {r.isCurrent && <span className="badge ml-2">Current</span>}
+            <span className="text-dim">
+              {" "}
+              · “{r.title}” · {r.windows.length} window{r.windows.length === 1 ? "" : "s"}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }

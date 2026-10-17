@@ -1,6 +1,8 @@
-import { Form, Link } from "react-router";
+import { Link } from "react-router";
 import type { Route } from "./+types/me";
 import { requireAssignedUser } from "../auth/authorize.server";
+import { AppShell } from "../components/app-header";
+import { MetadataList, Notice, PageHeader } from "../components/ui";
 import { getRequestScope } from "../server/request-scope.server";
 
 export function meta(_args: Route.MetaArgs) {
@@ -19,43 +21,89 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   };
 }
 
+const ROLE_LABEL: Record<string, string> = {
+  CONVENER: "Committee convener",
+  REVIEWER: "Corporate Communication reviewer",
+  SERVER_ROOM_MANAGER: "Server Room Manager",
+  ADMIN: "Administrator",
+};
+
 export default function Me({ loaderData }: Route.ComponentProps) {
+  const { roles, committees } = loaderData;
   return (
-    <main className="mx-auto max-w-md p-6 pt-16">
-      <h1 className="text-2xl font-semibold">{loaderData.displayName}</h1>
-      <p className="text-sm text-gray-600">{loaderData.email}</p>
-      <h2 className="mt-6 font-medium">Roles</h2>
-      <ul className="list-disc pl-5 text-sm">
-        {loaderData.roles.map((r) => (
-          <li key={r}>{r}</li>
-        ))}
-      </ul>
-      <h2 className="mt-4 font-medium">Committees</h2>
-      <ul className="list-disc pl-5 text-sm">
-        {loaderData.committees.length === 0 && <li>None</li>}
-        {loaderData.committees.map((c) => (
-          <li key={c.code}>
-            {c.code} ({c.type})
-          </li>
-        ))}
-      </ul>
-      <nav className="mt-6 flex gap-4 text-sm">
-        {loaderData.roles.includes("CONVENER") && (
-          <Link className="underline" to="/submissions">
-            My submissions
-          </Link>
+    <AppShell roles={roles}>
+      <PageHeader
+        eyebrow="Your account"
+        title={loaderData.displayName}
+        description={<span className="break-all">{loaderData.email}</span>}
+      />
+
+      <MetadataList
+        items={[
+          {
+            label: "Roles",
+            value: roles.length ? (
+              <ul className="m-0 list-none p-0">
+                {roles.map((r) => (
+                  <li key={r}>{ROLE_LABEL[r] ?? r}</li>
+                ))}
+              </ul>
+            ) : (
+              "None"
+            ),
+          },
+          {
+            label: "Committees",
+            value: committees.length ? (
+              <ul className="m-0 list-none p-0">
+                {committees.map((c) => (
+                  <li key={c.code}>
+                    {c.code} <span className="mono text-xs text-dim">{c.type}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              "None"
+            ),
+          },
+        ]}
+      />
+
+      <div className="mt-12">
+        <p className="eyebrow mb-4">Where to next</p>
+        {roles.includes("CONVENER") || roles.includes("REVIEWER") ? (
+          <div className="rows">
+            {roles.includes("CONVENER") && (
+              <Link to="/submissions" className="row-item hover-row group">
+                <span className="step-num pt-1.5">01</span>
+                <span>
+                  <span className="block text-2xl font-semibold tracking-tight group-hover:text-brand">
+                    My submissions <span aria-hidden="true">→</span>
+                  </span>
+                  <span className="mt-1 block text-dim">Create drafts, upload media, and track review decisions.</span>
+                </span>
+              </Link>
+            )}
+            {roles.includes("REVIEWER") && (
+              <Link to="/review" className="row-item hover-row group">
+                <span className="step-num pt-1.5">{roles.includes("CONVENER") ? "02" : "01"}</span>
+                <span>
+                  <span className="block text-2xl font-semibold tracking-tight group-hover:text-brand">
+                    Review queue <span aria-hidden="true">→</span>
+                  </span>
+                  <span className="mt-1 block text-dim">
+                    Approve, reject, or request changes on pending submissions.
+                  </span>
+                </span>
+              </Link>
+            )}
+          </div>
+        ) : (
+          <Notice tone="info">
+            Your roles don’t have a page in this release yet. Manager and administrator tools arrive in a later phase.
+          </Notice>
         )}
-        {loaderData.roles.includes("REVIEWER") && (
-          <Link className="underline" to="/review">
-            Review queue
-          </Link>
-        )}
-      </nav>
-      <Form method="post" action="/logout" className="mt-6">
-        <button type="submit" className="rounded border px-4 py-2">
-          Sign out
-        </button>
-      </Form>
-    </main>
+      </div>
+    </AppShell>
   );
 }
