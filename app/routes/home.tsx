@@ -1,6 +1,7 @@
 import { Link, redirect } from "react-router";
 import type { Route } from "./+types/home";
 import { resolveAccess } from "../auth/authorize.server";
+import { landingPath } from "../auth/landing";
 import { PublicHeader } from "../components/app-header";
 import { SiteFooter } from "../components/ui";
 import { getRequestScope } from "../server/request-scope.server";
@@ -22,7 +23,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const scope = getRequestScope(context);
   try {
     const access = await resolveAccess(scope, request.headers);
-    if (access.status === "ok") throw redirect("/me");
+    if (access.status === "ok") throw redirect(landingPath(access.user.roles));
     if (access.status === "unassigned") throw redirect("/unclaimed");
   } catch (err) {
     if (err instanceof Response) throw err;

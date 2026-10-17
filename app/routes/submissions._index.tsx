@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import type { Route } from "./+types/submissions._index";
 import { requireRole } from "../auth/authorize.server";
 import { AppShell } from "../components/app-header";
@@ -21,6 +21,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export default function Submissions({ loaderData }: Route.ComponentProps) {
   const { items, roles, canCreate } = loaderData;
+  const navigate = useNavigate();
   return (
     <AppShell roles={roles}>
       <PageHeader
@@ -54,7 +55,6 @@ export default function Submissions({ loaderData }: Route.ComponentProps) {
           <table className="vtable">
             <thead>
               <tr>
-                <th scope="col">Reference</th>
                 <th scope="col">Title</th>
                 <th scope="col">Committee</th>
                 <th scope="col">Status</th>
@@ -63,13 +63,12 @@ export default function Submissions({ loaderData }: Route.ComponentProps) {
             </thead>
             <tbody>
               {items.map((s) => (
-                <tr key={s.id}>
-                  <td>
-                    <Link className="link mono tabular" to={`/submissions/${s.id}`}>
-                      {s.referenceCode}
+                <tr key={s.id} className="cursor-pointer" onClick={() => navigate(`/submissions/${s.id}`)}>
+                  <td className="max-w-80 font-medium">
+                    <Link className="link" to={`/submissions/${s.id}`} onClick={(e) => e.stopPropagation()}>
+                      {s.title}
                     </Link>
                   </td>
-                  <td className="max-w-80 font-medium">{s.title}</td>
                   <td className="text-dim">{s.committeeName}</td>
                   <td>
                     <StatusBadge status={s.status} />

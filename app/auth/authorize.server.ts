@@ -15,6 +15,7 @@ import { appRole, appUser, authSession, userRole } from "../db/schema/identity.t
 import { committee, committeeMembership } from "../db/schema/campus.ts";
 import { ROLE_CODES, type MembershipType, type RoleCode } from "../db/schema/values.ts";
 import { AuthConfigError, SESSION_POLICY } from "./config.server.ts";
+import { landingPath } from "./landing.ts";
 
 export interface Membership {
   committeeId: string;
@@ -169,7 +170,7 @@ export async function requireUnassigned(scope: Scope, request: Request): Promise
   const access = await resolveAccessForPage(scope, request.headers);
   if (access.status === "anonymous") throw redirect("/login");
   if (access.status === "inactive") throw redirect("/login?error=inactive");
-  if (access.status === "ok") throw redirect("/me");
+  if (access.status === "ok") throw redirect(landingPath(access.user.roles));
   return access.user;
 }
 

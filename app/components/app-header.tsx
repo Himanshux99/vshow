@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Form, Link, NavLink, useLocation } from "react-router";
+import { landingPath } from "../auth/landing";
 import { ThemeToggle, Wordmark } from "./ui";
 
 interface NavItem {
@@ -13,6 +14,7 @@ function navFor(roles: readonly string[]): NavItem[] {
   if (roles.includes("CONVENER")) items.push({ to: "/submissions", label: "My submissions" });
   if (roles.includes("REVIEWER")) items.push({ to: "/review", label: "Review queue" });
   if (roles.includes("SERVER_ROOM_MANAGER")) items.push({ to: "/manager", label: "Server room" });
+  if (roles.includes("ADMIN")) items.push({ to: "/admin", label: "Users" });
   return items;
 }
 
@@ -56,7 +58,7 @@ export function AppHeader({ roles }: { roles: readonly string[] }) {
     <header className="navbar">
       <div className="container-voss">
         <nav className="navbar-inner" aria-label="Main">
-          <Wordmark to="/me" />
+          <Wordmark to={landingPath(roles)} />
           <ul className="m-0 ml-4 hidden list-none items-center gap-7 p-0 md:flex">
             {items.map((item) => (
               <li key={item.to}>

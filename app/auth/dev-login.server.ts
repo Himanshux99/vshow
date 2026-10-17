@@ -40,5 +40,5 @@ export async function handleDevLogin(scope: Scope, request: Request): Promise<Re
   const headers = new Headers();
   for (const cookie of response.headers.getSetCookie()) headers.append("set-cookie", cookie);
   headers.set("cache-control", "no-store");
-  return redirect("/me", { headers });
+  return redirect("/", { headers });
 }

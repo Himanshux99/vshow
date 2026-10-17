@@ -2,6 +2,7 @@ import { Form, data, redirect } from "react-router";
 import type { Route } from "./+types/login";
 import { assertSameOrigin, authUnavailable, resolveAccess } from "../auth/authorize.server";
 import { AuthConfigError } from "../auth/config.server";
+import { landingPath } from "../auth/landing";
 import { PublicHeader } from "../components/app-header";
 import { Notice } from "../components/ui";
 import { SubmitButton } from "../components/workflow-ui";
@@ -35,7 +36,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   let available: boolean;
   try {
     const access = await resolveAccess(scope, request.headers);
-    if (access.status === "ok") throw redirect("/me");
+    if (access.status === "ok") throw redirect(landingPath(access.user.roles));
     if (access.status === "unassigned") throw redirect("/unclaimed");
     // No registered vauth client (local development before registration): the sign-in button is replaced by a notice.
     available = scope.auth.config().oauth !== null;
@@ -64,7 +65,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (!config.oauth) throw data(null, { status: 503 }); // vauth client not configured
 
   const response = await scope.auth.get().api.signInWithOAuth2({
-    body: { providerId: "voss", callbackURL: "/me" },
+    body: { providerId: "voss", callbackURL: "/" },
     headers: request.headers,
     asResponse: true,
   });
