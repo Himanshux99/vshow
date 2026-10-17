@@ -2,15 +2,13 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 
-/** "VOSS" wordmark with the orange square. Product name gets its own text treatment beside it. */
+/** "Vshow" wordmark. */
 export function Wordmark({ to = "/" }: { to?: string }) {
   return (
     <Link to={to} className="inline-flex items-center gap-3" aria-label="Vshow home">
       <span className="wordmark" aria-hidden="true">
-        VOSS
-        <span className="wordmark-square" />
+        VShow
       </span>
-      <span className="product-name">Vshow</span>
     </Link>
   );
 }
@@ -235,9 +233,8 @@ export function SiteFooter() {
   return (
     <footer className="rule-top mt-24 py-12">
       <div className="container-voss flex flex-wrap items-center justify-between gap-6">
-        <span className="wordmark" role="img" aria-label="VOSS Labs">
-          VOSS
-          <span className="wordmark-square" aria-hidden="true" />
+        <span className="wordmark" role="img" aria-label="Vshow">
+          Vshow
         </span>
         <p className="mono text-xs tracking-wider text-dim uppercase">Vshow · Campus screen media approval</p>
       </div>

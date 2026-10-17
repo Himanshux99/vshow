@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/me";
 import { requireAssignedUser } from "../auth/authorize.server";
+import { ROLE_LABEL } from "../auth/landing";
 import { AppShell } from "../components/app-header";
 import { MetadataList, Notice, PageHeader } from "../components/ui";
 import { getRequestScope } from "../server/request-scope.server";
@@ -21,15 +22,32 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   };
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  CONVENER: "Committee convener",
-  REVIEWER: "Corporate Communication reviewer",
-  SERVER_ROOM_MANAGER: "Server Room Manager",
-  ADMIN: "Administrator",
-};
+// One entry per role that has a page, in the same order as the header navigation.
+const DESTINATIONS = [
+  {
+    role: "CONVENER",
+    to: "/submissions",
+    title: "My submissions",
+    text: "Create drafts, upload media, and track review decisions.",
+  },
+  {
+    role: "REVIEWER",
+    to: "/review",
+    title: "Review queue",
+    text: "Approve, reject, or request changes on pending submissions.",
+  },
+  {
+    role: "SERVER_ROOM_MANAGER",
+    to: "/manager",
+    title: "Server room",
+    text: "See approved media to put on the screens and mark it done.",
+  },
+  { role: "ADMIN", to: "/admin", title: "Users", text: "Assign roles and committee memberships to people." },
+];
 
 export default function Me({ loaderData }: Route.ComponentProps) {
   const { roles, committees } = loaderData;
+  const destinations = DESTINATIONS.filter((d) => (roles as readonly string[]).includes(d.role));
   return (
     <AppShell roles={roles}>
       <PageHeader
@@ -71,37 +89,22 @@ export default function Me({ loaderData }: Route.ComponentProps) {
 
       <div className="mt-12">
         <p className="eyebrow mb-4">Where to next</p>
-        {roles.includes("CONVENER") || roles.includes("REVIEWER") ? (
+        {destinations.length ? (
           <div className="rows">
-            {roles.includes("CONVENER") && (
-              <Link to="/submissions" className="row-item hover-row group">
-                <span className="step-num pt-1.5">01</span>
+            {destinations.map((d, i) => (
+              <Link key={d.to} to={d.to} className="row-item hover-row group">
+                <span className="step-num pt-1.5">{String(i + 1).padStart(2, "0")}</span>
                 <span>
                   <span className="block text-2xl font-semibold tracking-tight group-hover:text-brand">
-                    My submissions <span aria-hidden="true">→</span>
+                    {d.title} <span aria-hidden="true">→</span>
                   </span>
-                  <span className="mt-1 block text-dim">Create drafts, upload media, and track review decisions.</span>
+                  <span className="mt-1 block text-dim">{d.text}</span>
                 </span>
               </Link>
-            )}
-            {roles.includes("REVIEWER") && (
-              <Link to="/review" className="row-item hover-row group">
-                <span className="step-num pt-1.5">{roles.includes("CONVENER") ? "02" : "01"}</span>
-                <span>
-                  <span className="block text-2xl font-semibold tracking-tight group-hover:text-brand">
-                    Review queue <span aria-hidden="true">→</span>
-                  </span>
-                  <span className="mt-1 block text-dim">
-                    Approve, reject, or request changes on pending submissions.
-                  </span>
-                </span>
-              </Link>
-            )}
+            ))}
           </div>
         ) : (
-          <Notice tone="info">
-            Your roles don’t have a page in this release yet. Manager and administrator tools arrive in a later phase.
-          </Notice>
+          <Notice tone="info">You don’t have a role with a page yet. An administrator can assign one.</Notice>
         )}
       </div>
     </AppShell>

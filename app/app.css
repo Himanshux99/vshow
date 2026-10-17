@@ -659,14 +659,6 @@
     line-height: 1;
     color: var(--text);
   }
-  .wordmark-square {
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    margin-left: 4px;
-    background: var(--brand-pure);
-    transform: translateY(0);
-  }
   .product-name {
     font-family: var(--font-mono);
     font-size: 0.8rem;

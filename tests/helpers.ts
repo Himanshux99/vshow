@@ -10,12 +10,13 @@ import { DEFAULT_MEDIA_POLICY } from "../app/submissions/media-policy.server.ts"
 /**
  * Runs a node script with the real environment plus test defaults: APP_ENV=test (so throwaway
  * `vshow_test_*` databases are permitted) and VSHOW_ENV_FILE='' (ignore the developer's .env when the
- * guard looks for shell-vs-.env conflicts). Individual tests override these to exercise refusals.
+ * guard looks for shell-vs-.env conflicts). VSHOW_DEV_AUTH is cleared because a developer's .env may enable it,
+ * and dev auth refuses to start unless APP_ENV=development. Individual tests override these to exercise refusals.
  */
 export function runNode(args: string[], env?: Record<string, string>) {
   return spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", ...args], {
     encoding: "utf8",
-    env: { ...process.env, APP_ENV: "test", VSHOW_ENV_FILE: "", ...env },
+    env: { ...process.env, APP_ENV: "test", VSHOW_ENV_FILE: "", VSHOW_DEV_AUTH: "", ...env },
   });
 }
 
