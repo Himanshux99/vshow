@@ -1,0 +1,10 @@
+# Generated, vendored or prose that we do not auto-format
+node_modules
+build
+.react-router
+drizzle
+package-lock.json
+docs
+.agents
+.claude
+coverage

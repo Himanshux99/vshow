@@ -1,0 +1,6 @@
+# Gitleaks fingerprints that are known false positives. Only synthetic test fixtures belong here; never add a
+# real credential (rotate it instead). Format: <commit>:<file>:<rule>:<line>
+#
+# A sample JWT with a fake signature, used to prove the log sanitizer redacts JWT-shaped strings. It was committed
+# before the fixture was assembled at runtime (tests/logging.test.ts). History is not rewritten.
+4be9060558869097af7f53271803c866e4830e46:tests/logging.test.ts:jwt:66

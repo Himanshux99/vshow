@@ -1,7 +1,62 @@
-.DS_Store
+# --- Secrets & local environment (only .env.example is tracked) ---
 .env
-/node_modules/
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.dev.vars
 
-# React Router
+# --- Dependencies ---
+/node_modules/
+.pnpm-store/
+
+# --- React Router / Vite build output ---
 /.react-router/
 /build/
+/dist/
+*.tsbuildinfo
+.vite/
+
+# --- Vercel / deployment ---
+.vercel/
+
+# --- Tests & coverage ---
+/coverage/
+/test-results/
+/playwright-report/
+.nyc_output/
+
+# --- Logs & temp ---
+*.log
+npm-debug.log*
+.npm/
+.eslintcache
+.cache/
+tmp/
+.tmp/
+
+# --- Local database data / dumps (never commit data) ---
+/pgdata/
+*.sql.gz
+*.dump
+*.sqlite
+*.sqlite3
+# Migrations in /drizzle are source code and MUST be tracked.
+
+# --- Editors & OS ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*~
+postman/
+
+# --- Claude Code local-only files (shared .claude/ config stays tracked) ---
+.claude/settings.local.json
+.claude/worktrees/

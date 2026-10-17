@@ -1,0 +1,131 @@
+name: CI
+
+# Runs on pushes to main and on pull requests (never pull_request_target). No repository secrets are
+# used: the only database is a throwaway service container created for each run.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash # GitHub's bash adds -eo pipefail, so a failure inside a pipe fails the step
+
+# Third-party actions are pinned to full commit SHAs (version in the trailing comment);
+# Dependabot (.github/dependabot.yml) proposes updates.
+jobs:
+  quality:
+    name: Format, lint, types, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Pin npm to the version in package.json
+        run: |
+          npm install -g "npm@$(node -p "require('./package.json').packageManager.split('@')[1]")"
+          npm --version
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck # react-router typegen && tsc
+      - run: npm run build
+
+  database:
+    name: Migrations, seed and tests (disposable Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: vshow
+          POSTGRES_PASSWORD: ci-only-throwaway # not a secret: the container is destroyed after the run
+          POSTGRES_DB: vshow
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vshow -d vshow" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      # Never point CI at Neon or any shared database. The seed guard also refuses non-local targets.
+      APP_ENV: test
+      DB_TARGET: local
+      DATABASE_URL: postgresql://vshow:ci-only-throwaway@127.0.0.1:5432/vshow
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Pin npm to the version in package.json
+        run: |
+          npm install -g "npm@$(node -p "require('./package.json').packageManager.split('@')[1]")"
+          npm --version
+      - run: npm ci
+      - name: Migration files match the schema
+        run: npm run db:check
+      - name: Apply migrations, then prove re-running is a no-op
+        run: |
+          npm run db:migrate
+          npm run db:migrate | tee /tmp/migrate2.log
+          grep -q "Up to date" /tmp/migrate2.log
+          npm run db:health
+      - name: Seed twice, second run must create nothing
+        run: |
+          npm run db:seed
+          npm run db:seed | tee /tmp/seed2.log
+          if grep -E '\+[1-9][0-9]* new' /tmp/seed2.log; then
+            echo "Second seed run created rows: seeding is not idempotent" >&2
+            exit 1
+          fi
+      - name: Unit and integration tests (any skipped test fails the job)
+        run: npm run test:ci
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - run: docker build --pull -t vshow:ci .
+
+  security:
+    name: Dependency audit and secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0 # full history so committed-then-deleted secrets are found
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Pin npm to the version in package.json
+        run: |
+          npm install -g "npm@$(node -p "require('./package.json').packageManager.split('@')[1]")"
+          npm --version
+      - run: npm ci --ignore-scripts
+      - name: Audit production dependencies (fails on high or critical)
+        run: npm audit --omit=dev --audit-level=high
+      - name: Scan git history for secrets (gitleaks v8.30.1, pinned by digest)
+        run: >-
+          docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro"
+          ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git --redact --no-banner --verbose /repo
