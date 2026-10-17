@@ -98,7 +98,7 @@ export function PageHeader({
           {back && (
             <Link
               to={back.to}
-              className="link-quiet inline-flex items-center gap-2 text-sm"
+              className="link-quiet inline-flex items-center gap-2 text-sm no-underline"
               aria-label={`Back to ${back.label}`}
             >
               <svg

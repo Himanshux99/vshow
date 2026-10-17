@@ -29,7 +29,10 @@ export async function listUsers(db: Db): Promise<AdminUserListItem[]> {
       .select({ id: appUser.id, displayName: appUser.displayName, email: appUser.email, isActive: appUser.isActive })
       .from(appUser)
       .orderBy(asc(appUser.displayName)),
-    db.select({ userId: userRole.userId, code: appRole.code }).from(userRole).innerJoin(appRole, eq(appRole.id, userRole.roleId)),
+    db
+      .select({ userId: userRole.userId, code: appRole.code })
+      .from(userRole)
+      .innerJoin(appRole, eq(appRole.id, userRole.roleId)),
     db
       .select({ userId: committeeMembership.userId })
       .from(committeeMembership)
@@ -88,7 +91,11 @@ export async function getUserDetail(db: Db, actor: CurrentUser, userId: string):
       .innerJoin(committee, eq(committee.id, committeeMembership.committeeId))
       .where(eq(committeeMembership.userId, userId))
       .orderBy(asc(committee.name)),
-    db.select({ id: committee.id, name: committee.name }).from(committee).where(eq(committee.isActive, true)).orderBy(asc(committee.name)),
+    db
+      .select({ id: committee.id, name: committee.name })
+      .from(committee)
+      .where(eq(committee.isActive, true))
+      .orderBy(asc(committee.name)),
   ]);
   const taken = new Set(memberships.map((m) => m.committeeId));
   return {
@@ -117,13 +124,14 @@ export async function setRole(
   await deps.database.get().transaction(async (tx) => {
     const [user] = await tx.select({ id: appUser.id }).from(appUser).where(eq(appUser.id, userId)).limit(1);
     if (!user) throw notFound();
-    const [role] = await tx.select({ id: appRole.id }).from(appRole).where(eq(appRole.code, input.role as string)).limit(1);
+    const [role] = await tx
+      .select({ id: appRole.id })
+      .from(appRole)
+      .where(eq(appRole.code, input.role as string))
+      .limit(1);
     if (!role) throw invalid("role");
     if (input.grant) {
-      await tx
-        .insert(userRole)
-        .values({ userId, roleId: role.id, assignedByUserId: actor.id })
-        .onConflictDoNothing();
+      await tx.insert(userRole).values({ userId, roleId: role.id, assignedByUserId: actor.id }).onConflictDoNothing();
     } else {
       await tx.delete(userRole).where(and(eq(userRole.userId, userId), eq(userRole.roleId, role.id)));
     }

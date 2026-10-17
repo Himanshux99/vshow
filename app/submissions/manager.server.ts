@@ -23,7 +23,6 @@ import {
   type VersionView,
 } from "./queries.server.ts";
 
-
 export const isManager = (actor: CurrentUser) => actor.roles.includes("SERVER_ROOM_MANAGER");
 
 export interface ManagerListItem extends ListItem {

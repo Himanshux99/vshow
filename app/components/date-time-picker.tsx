@@ -33,7 +33,11 @@ export function DateTimePicker({
   return (
     <Popover>
       <PopoverTrigger id={id} type="button" className="field text-left">
-        {parsed ? `${shown.format(parsed.date)}, ${parsed.time}` : <span className="text-dim">Pick date and time…</span>}
+        {parsed ? (
+          `${shown.format(parsed.date)}, ${parsed.time}`
+        ) : (
+          <span className="text-dim">Pick date and time…</span>
+        )}
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-0">
         <Calendar
