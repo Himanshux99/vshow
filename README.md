@@ -105,17 +105,57 @@ Anything it cannot classify is refused. Remote (Neon) migrations are unchanged: 
 
 It is idempotent (insert-if-missing, never updates), runs in one transaction, and requires `APP_ENV=development|test`, `DB_TARGET=local`, the local Compose database (shared guard below) and a fully migrated schema. It refuses production/Vercel markers; remote seeding is not supported. To remove only the fixture rows (by exact id; roles are kept): `npm run db:seed -- --remove --confirm=<database name>`. Because existing rows are never updated, fixture changes only reach a database after `--remove` and a fresh seed.
 
+## Server Room Manager handoff
+
+Code: [app/submissions/manager.server.ts](app/submissions/manager.server.ts); pages `/manager` (queue) and `/manager/:id`. Requires the `SERVER_ROOM_MANAGER` role.
+
+- **Queue:** only submissions whose _current_ revision has an approving decision appear, split into "To do" and "Done". A new media version or edited revision drops the submission out of the queue until it is approved again.
+- **Download:** the manager downloads the exact approved version through the normal authorized, signed-URL file route.
+- **Mark done:** records one `SCHEDULED` `schedule_entry` per requested screen for the approved media version, with an optional note. Marking done twice is refused.
+- **Undo:** marks the active entries `CANCELLED`. Nothing is deleted; both actions are audited (`SCHEDULE_MARKED_DONE`, `SCHEDULE_UNDONE`).
+- Requested windows are never changed. The manager arranges overlaps in the signage software, outside Vshow, and Vshow does not read what is actually playing.
+
+## Administration
+
+Code: [app/admin/users.server.ts](app/admin/users.server.ts); pages `/admin` (user list) and `/admin/:id` (one user). Requires the `ADMIN` role, which grants no access to submissions.
+
+- Grant or revoke the four roles (`CONVENER`, `REVIEWER`, `SERVER_ROOM_MANAGER`, `ADMIN`) for any user. An administrator cannot revoke their own `ADMIN` role.
+- Add, change or end a user's committee membership (membership type chosen per committee).
+- New sign-ins have no role until an administrator assigns one.
+- Role and membership changes are **not yet written to the audit trail**; the rows record `assigned_by_user_id` only.
+
+## Implementation status
+
+Phase 1 against [docs/Vshow_PRD_v1.1.md](docs/Vshow_PRD_v1.1.md):
+
+| Area                                                         | Status                                                          |
+| ------------------------------------------------------------ | --------------------------------------------------------------- |
+| vauth sign-in, local users, role and committee authorization | Done (dev identity switcher for local use)                      |
+| Submissions, media versions, signed uploads, revisions       | Done                                                            |
+| Review queue, approve / reject / request changes             | Done                                                            |
+| Manager queue, download approved version, mark done / undo   | Done (simplified, see above)                                    |
+| Admin: users, roles, committee memberships                   | Done                                                            |
+| Admin: create and edit committees and screens                | **Missing** (only via seed data or SQL)                         |
+| Admin: global audit history view                             | **Missing** (audit shows per submission only)                   |
+| Admin: audit events for role and membership changes          | **Missing**                                                     |
+| Manager: actual window, screen override, external reference  | **Missing** (`schedule_entry` supports it; no UI or service)    |
+| Manager: manual "playing confirmed" and "completed"          | **Missing**                                                     |
+| Withdraw a pending submission (`CANCELLED`)                  | **Missing**                                                     |
+| Dedicated "resubmit a rejected submission" button            | **Missing** (service exists; links are shown in both histories) |
+| Notifications, reporting, timeline                           | Phase 2                                                         |
+| Health-check route, `robots.txt`, web manifest and icons     | Missing                                                         |
+
 ## Quality checks
 
-| Command                                   | Checks                                                                                           |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `npm run check`                           | format + lint + typecheck + tests (run this before pushing)                                      |
-| `npm run format` / `npm run format:check` | Prettier (write / verify)                                                                        |
-| `npm run lint`                            | ESLint (typescript-eslint)                                                                       |
-| `npm run typecheck`                       | `react-router typegen && tsc`                                                                    |
-| `npm test`                                | Test runner (`scripts/run-tests.mjs`); skipped tests are reported loudly but do not fail locally |
-| `npm run test:ci`                         | Same, but **any skipped or todo test fails the run** (used by CI)                                |
-| `npm run build`                           | Production build                                                                                 |
+| Command                                   | Checks                                                                                                     |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `npm run check`                           | format + lint + typecheck + tests (run this before pushing)                                                |
+| `npm run format` / `npm run format:check` | Prettier (write / verify)                                                                                  |
+| `npm run lint`                            | ESLint (typescript-eslint)                                                                                 |
+| `npm run typecheck`                       | `react-router typegen && tsc`, run by `scripts/typecheck.mjs` (clears `VSHOW_DEV_AUTH` for this step only) |
+| `npm test`                                | Test runner (`scripts/run-tests.mjs`); skipped tests are reported loudly but do not fail locally           |
+| `npm run test:ci`                         | Same, but **any skipped or todo test fails the run** (used by CI)                                          |
+| `npm run build`                           | Production build                                                                                           |
 
 Database-backed tests create and drop their own uniquely named database on local Postgres. If it is not running they are **skipped, not passed**: `npm test` prints a warning listing them, and `npm run test:ci` exits non-zero. Run `npm run db:up` first. The Docker-context test is likewise skipped when Docker is unavailable. The runner uses the test framework's own events (not output parsing); intentional skips can be allow-listed with a documented reason in `scripts/run-tests.mjs` (currently none).
 
@@ -160,9 +200,9 @@ Pull requests never need production credentials and never connect to production 
 
 ## Core workflow: submissions, media and review (Phase 1)
 
-A **convener** creates a submission for a committee they actively belong to, uploads one media asset (JPEG, PNG, WebP or MP4, 100 MiB by default), requests display windows on screens, and submits it. A **Corporate Communication reviewer** (global, not per committee) approves, rejects (reason required) or requests changes (comment required). Server Room Manager scheduling, playback and the full resubmission UI are later phases.
+A **convener** creates a submission for a committee they actively belong to, uploads one media asset (JPEG, PNG, WebP or MP4, 100 MiB by default), requests display windows on screens, and submits it. A **Corporate Communication reviewer** (global, not per committee) approves, rejects (reason required) or requests changes (comment required). The **Server Room Manager** then marks approved media as put on the screens, and an **administrator** assigns roles and committee memberships (see the two sections below). Per-screen scheduling details, playback confirmation and a dedicated resubmission button are not built yet (see [Implementation status](#implementation-status)).
 
-- **Pages:** `/submissions` (convener list), `/submissions/new`, `/submissions/:id` (details, windows, media, history), `/review` (queue) and `/review/:id` (decision). Resource routes: `POST /submissions/:id/upload`, `POST /submissions/:id/upload/finalize`, `GET /submissions/:id/versions/:versionId/file` (authorizes, then redirects to a short-lived signed download URL).
+- **Pages:** `/submissions` (convener list), `/submissions/new`, `/submissions/:id` (details, windows, media, history), `/review` (queue) and `/review/:id` (decision). `/me` is the account page and `/unclaimed` is where a signed-in person with no role lands. Resource routes: `POST /submissions/:id/upload`, `POST /submissions/:id/upload/finalize`, `GET /submissions/:id/versions/:versionId/file` (authorizes, then redirects to a short-lived signed download URL).
 - **Authorization** is checked against the actual submission on every read and write ([app/submissions/access.server.ts](app/submissions/access.server.ts)): a convener needs the CONVENER role **and** an active membership of that committee; a reviewer needs the REVIEWER role and never sees drafts or decides on their own submission; admins get nothing implicitly. A submission you may not see is reported as "not found".
 - **States:** DRAFT → PENDING_REVIEW → APPROVED / REJECTED / CHANGES_REQUESTED. A pending submission cannot be edited (withdrawal is out of scope). REJECTED is terminal: a resubmission is a **new** submission linked to the old one (`resubmission_of_id`) with its own version 1 and no inherited approval (service and schema are in place; the dedicated UI comes later). Editing or replacing media of an APPROVED submission withdraws the approval (back to DRAFT, audited).
 - **Revisions:** submitting freezes title, description, media version and requested windows into an immutable `submission_revision`. A review decision names that exact revision; approving anything but the current revision is refused, and an approval of an old revision never makes a newer one eligible.

@@ -79,8 +79,8 @@ Open **http://localhost:5173/dev/login** and pick a test user. Roles come from t
 | `convener_media`    | Create submissions for the Media committee: `/submissions`                          |
 | `convener_robotics` | Same, for the Robotics committee (cannot see Media's submissions)                   |
 | `reviewer`          | Review queue: `/review` (approve / reject / request changes)                        |
-| `manager`           | Server Room Manager (its pages come in a later phase)                               |
-| `admin`             | Administrator (no extra powers over submissions)                                    |
+| `manager`           | Server Room Manager: `/manager` queue, download, mark done / undo                   |
+| `admin`             | Administrator: `/admin` to assign roles and memberships (cannot see submissions)    |
 | `member_media`      | Signed in but has no role, so you land on `/unclaimed`                              |
 | `convener_lapsed`   | Has the convener role but no active membership, so cannot create or see submissions |
 | `inactive_convener` | Deactivated user: sign-in is refused                                                |
