@@ -35,6 +35,9 @@ export function createS3Client(config: NeonStorageConfig): S3Client {
     requestChecksumCalculation: "WHEN_REQUIRED",
     responseChecksumValidation: "WHEN_REQUIRED",
     maxAttempts: 1, // no automatic retries (Vshow never retries a write without an idempotency strategy)
+    // Finalization talks to storage while holding database row locks, so a stalled connection must not hold them
+    // indefinitely: fail the request (the transaction rolls back and the upload can be finalized again later).
+    requestHandler: { connectionTimeout: 5_000, requestTimeout: 60_000 },
   });
 }
 

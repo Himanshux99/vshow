@@ -48,11 +48,12 @@ Check the database any time with `npm run db:health`.
 
 ### Local PostgreSQL (default)
 
-| Command                  | Effect                                                                                   |
-| ------------------------ | ---------------------------------------------------------------------------------------- |
-| `npm run db:up`          | Start Postgres 16 bound to `127.0.0.1`, wait until healthy                               |
-| `npm run db:down`        | Stop and remove the container; **data is kept** in the Docker volume                     |
-| `npm run db:reset:local` | **Deletes all local data.** Type the database name to confirm; refuses non-local targets |
+| Command                     | Effect                                                                                                                                                                                                                                                           |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run db:up`             | Start Postgres 16 bound to `127.0.0.1`, wait until healthy                                                                                                                                                                                                       |
+| `npm run db:down`           | Stop and remove the container; **data is kept** in the Docker volume                                                                                                                                                                                             |
+| `npm run db:recreate:local` | Drops and recreates **only** the local `vshow` database (empty), leaving the server, its volume and every other database alone. Type the database name to confirm; `--dry-run` checks without changing; refuses non-local targets; then run `npm run db:migrate` |
+| `npm run db:reset:local`    | **Deletes the whole local Postgres volume (every database in it).** Type the database name to confirm; refuses non-local targets                                                                                                                                 |
 
 ### Neon (optional, for development only)
 
@@ -87,7 +88,7 @@ Schema source: [app/db/schema/](app/db/schema/) (mirrors [docs/Vshow_Database_Sc
 
 ### Local-target guard (migrate, seed, reset)
 
-A loopback address alone is **not** trusted: an SSH tunnel or port-forward to a real database also looks like `127.0.0.1`. Every command that writes to a local database (`db:migrate` on a local target, `db:seed`, `db:reset:local`) uses one shared guard, [scripts/lib/local-target.ts](scripts/lib/local-target.ts), which requires all of:
+A loopback address alone is **not** trusted: an SSH tunnel or port-forward to a real database also looks like `127.0.0.1`. Every command that writes to a local database (`db:migrate` on a local target, `db:seed`, `db:recreate:local`, `db:reset:local`) uses one shared guard, [scripts/lib/local-target.ts](scripts/lib/local-target.ts), which requires all of:
 
 - `DB_TARGET=local`, and `APP_ENV` unset or `development`/`test` (seeding requires it to be set); no `NODE_ENV=production` or Vercel markers.
 - Host exactly `127.0.0.1` or `localhost`; port equal to `POSTGRES_PORT` (default 5432); user equal to `POSTGRES_USER`; database equal to `POSTGRES_DB` (default `vshow`). Under `APP_ENV=test` only, throwaway `vshow_test_*` databases are also allowed.
@@ -203,14 +204,14 @@ Known limitation: `npm start` / the Docker image use `react-router-serve`, whose
 | `Docker daemon is not running`                      | Start Docker Desktop / the docker service, re-run the command                                                                                                                                                            |
 | `ports are not available` / port 5432 in use        | Set `POSTGRES_PORT` (e.g. 55432) **and the port in `DATABASE_URL`** in `.env`, then `npm run db:down && npm run db:up`. Windows can reserve port ranges; `netsh int ipv4 show excludedportrange protocol=tcp` lists them |
 | `POSTGRES_PASSWORD is not set`                      | Run `npm run setup`                                                                                                                                                                                                      |
-| `password authentication failed`                    | The volume keeps the password it was first created with. If the data is only local: `npm run db:reset:local`                                                                                                             |
+| `password authentication failed`                    | The volume keeps the password it was first created with. If the data is only local: `npm run db:reset:local` (or `npm run db:recreate:local` if the password is right and only the database content is wrong)            |
 | `Could not connect ...`                             | `npm run db:up`, then `docker compose ps` and `docker compose logs postgres`; check host/port in `.env` (messages never include credentials)                                                                             |
 | Setup was interrupted                               | Run `npm run setup` again; it is idempotent and only fills missing values. A leftover `.env.tmp` can be deleted                                                                                                          |
 | `db:migrate` failed                                 | The failing migration is rolled back in a transaction, so the schema is unchanged. Read the error, fix, re-run; check state with `npm run db:health`. Never edit an applied migration                                    |
-| `applied migration(s) do not match committed files` | A migration file was edited or removed after it was applied. Restore it from Git (`git checkout -- drizzle/`). For a disposable local database you may instead `npm run db:reset:local` and migrate again                |
+| `applied migration(s) do not match committed files` | A migration file was edited or removed after it was applied. Restore it from Git (`git checkout -- drizzle/`). For a disposable local database you may instead `npm run db:recreate:local` and migrate again             |
 | `Seeding refused`                                   | Intentional: check `APP_ENV` (`development`/`test`), `DB_TARGET=local` and that the database is the local Compose one (see below)                                                                                        |
 | Database tests are skipped                          | Local Postgres is not reachable: `npm run db:up`                                                                                                                                                                         |
-| Corrupted local data, want a clean start            | `npm run db:reset:local`, `npm run db:migrate`, optionally `npm run db:seed` (local only)                                                                                                                                |
+| Corrupted local data, want a clean start            | `npm run db:recreate:local`, `npm run db:migrate`, optionally `npm run db:seed` (local only)                                                                                                                             |
 
 ## Security notes
 

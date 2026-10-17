@@ -415,7 +415,11 @@ describe("finalized media cannot be overwritten or altered", () => {
       h.resetStorageCalls();
       const again = await finalizeUpload(h.deps, await h.actor("convener"), m.id, m.reservationId);
       assert.equal(again.alreadyFinalized, true);
-      assert.deepEqual(h.storage.calls, [], "re-finalizing performs no storage operation at all");
+      assert.deepEqual(
+        h.storage.calls.filter((c) => c.method !== "deleteObject" || c.key !== `staging/${m.id}/${m.reservationId}`),
+        [],
+        "re-finalizing never inspects, copies or deletes anything but the (unreferenced) staging leftover",
+      );
       assert.equal((await versions(m.id)).length, 1);
       assert.deepEqual([...h.storage.get(v.object_key)!.bytes], before);
       assert.equal((await versions(m.id))[0].storage_etag, v.storage_etag);
@@ -719,5 +723,170 @@ describe("downloads", () => {
       createMediaDownloadUrl(deps, await h.actor("convener"), m.id, v.id, { as: "convener" }),
       "storage_unavailable",
     );
+  });
+});
+
+// --- concurrent and interrupted finalization -----------------------------------------------------------------------
+const waitForBlockedBackend = async () => {
+  for (let i = 0; i < 100; i++) {
+    const [{ n }] = await h.q<{ n: number }>(
+      "select count(*)::int n from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'",
+    );
+    if (n > 0) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  assert.fail("the second finalization never blocked on the database lock");
+};
+
+describe("concurrent and interrupted finalization", () => {
+  it(
+    "a second finalization of the same reservation waits for the first and never touches storage meanwhile",
+    opts,
+    async () => {
+      const s = await newDraft();
+      const a = await h.actor("convener");
+      const i = await init("convener", s.id);
+      h.storage.upload(i.upload, PNG);
+      const staging = `staging/${s.id}/${i.reservationId}`;
+      const final = `media/${s.id}/${i.reservationId}.png`;
+
+      h.resetStorageCalls(); // count only what this scenario does from here
+      // Hold the first finalization INSIDE its copy: it has taken the locks and is talking to storage.
+      const realCopy = h.storage.copyObject.bind(h.storage);
+      let entered!: () => void;
+      const enteredCopy = new Promise<void>((r) => (entered = r));
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      h.storage.copyObject = async (input) => {
+        entered();
+        await gate;
+        return realCopy(input);
+      };
+      try {
+        const first = finalizeUpload(h.deps, a, s.id, i.reservationId);
+        await enteredCopy;
+        h.storage.put(staging, PNG2, "image/png"); // the staging object is replaced while the copy is pending
+        const callsBefore = h.storage.calls.length;
+        const second = finalizeUpload(h.deps, a, s.id, i.reservationId);
+        await waitForBlockedBackend(); // the second request is parked on the database lock
+        assert.equal(h.storage.calls.length, callsBefore, "the waiting request performed no storage operation");
+        assert.equal(h.storage.has(final), false, "nothing exists at the final key yet");
+        release();
+        const [r1, r2] = await Promise.all([first, second]);
+        assert.deepEqual([r1.alreadyFinalized, r2.alreadyFinalized], [false, true]);
+        assert.equal(
+          h.storage.calls.filter((c) => c.method === "copyObject").length,
+          1,
+          "exactly one copy ever happened",
+        );
+        assert.equal(r1.versionId, r2.versionId);
+      } finally {
+        h.storage.copyObject = realCopy;
+        release();
+      }
+      const [v] = await versions(s.id);
+      assert.equal((await versions(s.id)).length, 1);
+      assert.deepEqual(
+        [...h.storage.get(final)!.bytes],
+        [...PNG2],
+        "the recorded object is exactly what was copied and validated",
+      );
+      assert.equal(v.storage_etag, (await h.storage.inspectObject(final))?.etag);
+    },
+  );
+
+  it(
+    "the database alone allows one media version per reservation, even if two writers bypass the service",
+    opts,
+    async () => {
+      const s = await newDraft();
+      const i = await init("convener", s.id);
+      const owner = (await h.actor("convener")).id;
+      const insert =
+        "insert into media_version(id, submission_id, version_number, object_key, original_filename, content_type, size_bytes, uploaded_by_user_id) values ($1,$2,$3,$4,'a.png','image/png',16,$5)";
+      const { default: pg } = await import("pg");
+      const c1 = new pg.Client({ connectionString: h.dbUrl });
+      const c2 = new pg.Client({ connectionString: h.dbUrl });
+      await Promise.all([c1.connect(), c2.connect()]);
+      try {
+        await c1.query("begin");
+        await c1.query(insert, [i.reservationId, s.id, 1, `media/${s.id}/${i.reservationId}.png`, owner]);
+        await c2.query("begin");
+        const racing = c2.query(insert, [i.reservationId, s.id, 2, `media/${s.id}/other.png`, owner]); // same id: blocks on the first
+        const settled = racing.then(
+          () => "inserted",
+          (e: Error) => e.message,
+        );
+        await waitForBlockedBackend();
+        await c1.query("commit");
+        assert.match(await settled, /duplicate key|media_version_pkey/);
+        await c2.query("rollback");
+        // the same version number under a different id is refused as well
+        await assert.rejects(
+          c2.query(insert, [crypto.randomUUID(), s.id, 1, `media/${s.id}/third.png`, owner]),
+          /media_version_submission_number_unique/,
+        );
+      } finally {
+        await c1.end();
+        await c2.end();
+      }
+      assert.equal((await versions(s.id)).length, 1);
+    },
+  );
+
+  it(
+    "a crash after the copy but before the record leaves nothing referenced, and a retry completes without copying again",
+    opts,
+    async () => {
+      const s = await newDraft();
+      const a = await h.actor("convener");
+      const i = await init("convener", s.id);
+      h.storage.upload(i.upload, PNG);
+      const final = `media/${s.id}/${i.reservationId}.png`;
+      const realHead = h.storage.readHead.bind(h.storage);
+      h.storage.readHead = async () => {
+        throw new Error("simulated process crash after the copy");
+      };
+      try {
+        await assert.rejects(finalizeUpload(h.deps, a, s.id, i.reservationId), /simulated process crash/);
+      } finally {
+        h.storage.readHead = realHead;
+      }
+      assert.deepEqual(await versions(s.id), [], "nothing was recorded");
+      assert.equal((await reservation(i.reservationId)).status, "PENDING", "the reservation is still open");
+      assert.ok(h.storage.has(final), "the copied object is an unreferenced leftover");
+      const leftover = [...h.storage.get(final)!.bytes];
+
+      const copiesBefore = h.storage.calls.filter((c) => c.method === "copyObject").length;
+      const done = await finalizeUpload(h.deps, a, s.id, i.reservationId);
+      assert.equal(done.alreadyFinalized, false);
+      assert.equal(
+        h.storage.calls.filter((c) => c.method === "copyObject").length,
+        copiesBefore,
+        "the leftover was validated and reused, not overwritten",
+      );
+      assert.deepEqual([...h.storage.get(final)!.bytes], leftover);
+      const [v] = await versions(s.id);
+      assert.equal(v.object_key, final);
+
+      // once referenced, nothing can change it: a swapped staging object and a replayed finalize are inert
+      h.storage.put(`staging/${s.id}/${i.reservationId}`, PNG2, "image/png");
+      const again = await finalizeUpload(h.deps, a, s.id, i.reservationId);
+      assert.equal(again.alreadyFinalized, true);
+      assert.deepEqual([...h.storage.get(final)!.bytes], leftover);
+      assert.equal((await versions(s.id)).length, 1);
+    },
+  );
+
+  it("a leftover final object that is not valid is never recorded, and is removed", opts, async () => {
+    const s = await newDraft();
+    const a = await h.actor("convener");
+    const i = await init("convener", s.id);
+    h.storage.upload(i.upload, PNG);
+    const final = `media/${s.id}/${i.reservationId}.png`;
+    h.storage.put(final, new Uint8Array(PNG.length).fill(1), "image/png"); // e.g. a half-written copy
+    await expectCode(finalizeUpload(h.deps, a, s.id, i.reservationId), "upload_rejected");
+    assert.deepEqual(await versions(s.id), []);
+    assert.ok(!h.storage.has(final));
   });
 });

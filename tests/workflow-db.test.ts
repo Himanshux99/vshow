@@ -278,6 +278,30 @@ describe("migration 0004 upgrade safety", async () => {
       assert.notEqual(r.status, 0, "the migration must not silently succeed");
       assert.ok(!(await tables()).includes("submission_revision"), "nothing from 0004 was applied");
       assert.ok((await tables()).includes("review_decision"));
+      // the failed run left the database exactly as it was: same migration history, same rows, nothing half-applied
+      const c = new pg.Client({ connectionString: db.url });
+      await c.connect();
+      try {
+        assert.equal((await c.query("select count(*)::int n from drizzle.__drizzle_migrations")).rows[0].n, 4);
+        assert.equal((await c.query("select count(*)::int n from review_decision")).rows[0].n, 1);
+        assert.equal((await c.query("select count(*)::int n from submission")).rows[0].n, 1);
+        const cols = (
+          await c.query("select column_name from information_schema.columns where table_name = 'review_decision'")
+        ).rows.map((x) => x.column_name);
+        assert.ok(!cols.includes("revision_id"), "the new column was rolled back with the rest");
+        const fns = (await c.query("select proname from pg_proc where proname like 'vshow\\_%'")).rows.map(
+          (x) => x.proname,
+        );
+        assert.ok(
+          !fns.includes("vshow_forbid_modification") && !fns.includes("vshow_next_reference_code"),
+          "no trigger function leaked",
+        );
+      } finally {
+        await c.end();
+      }
+      // and the health check reports the migration as pending, so the operator is told what to do
+      const health = runNode(["scripts/db-health.ts"], env());
+      assert.match(health.stdout + health.stderr, /4 applied, 1 pending/);
     },
   );
 });

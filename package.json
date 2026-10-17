@@ -20,6 +20,7 @@
     "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down",
     "db:reset:local": "node --disable-warning=ExperimentalWarning scripts/db-reset-local.mjs",
+    "db:recreate:local": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/db-recreate-local.ts",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "db:migrate": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/db-migrate.ts",

@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { rmSync, writeFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
-const hasDocker = spawnSync("docker", ["info"], { stdio: "ignore", timeout: 20_000 }).status === 0;
+const hasDocker = spawnSync("docker", ["info"], { stdio: "ignore", timeout: 90_000 }).status === 0;
 
 // Builds a throwaway image from the repo directory and lists exactly what the Docker build context
 // contains after .dockerignore is applied. The Dockerfile comes from stdin, so nothing is written to the repo

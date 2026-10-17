@@ -284,8 +284,16 @@ export async function finalizeUpload(
     case "ok":
       await deleteUnreferenced(deps, outcome.cleanup);
       return outcome.result;
-    case "again":
+    case "again": {
+      // A crash after the commit may have left the staging object behind. It is never referenced, so removing it is
+      // always safe; the final object is not touched.
+      const [r] = await db
+        .select({ k: uploadReservation.stagingKey })
+        .from(uploadReservation)
+        .where(eq(uploadReservation.id, reservationId));
+      if (r && deps.storage.configured) await deleteUnreferenced(deps, [r.k]);
       return outcome.result;
+    }
     case "missing":
       throw new WorkflowError("upload_missing");
     case "expired":
