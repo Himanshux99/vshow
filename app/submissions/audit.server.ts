@@ -12,9 +12,11 @@ export type AuditAction =
   | "SUBMISSION_SUBMITTED"
   | "REVIEW_APPROVED"
   | "REVIEW_REJECTED"
-  | "CHANGES_REQUESTED";
+  | "CHANGES_REQUESTED"
+  | "SCHEDULE_MARKED_DONE"
+  | "SCHEDULE_UNDONE";
 
-export type AuditEntity = "SUBMISSION" | "MEDIA_VERSION" | "REVIEW_DECISION";
+export type AuditEntity = "SUBMISSION" | "MEDIA_VERSION" | "REVIEW_DECISION" | "SCHEDULE_ENTRY";
 type Meta = Record<string, string | number | boolean | null | string[]>;
 
 export async function writeAudit(

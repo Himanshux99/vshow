@@ -22,6 +22,7 @@ import { finalKey, stagingKey } from "../storage/keys.server.ts";
 import { StorageUnavailableError, type UploadTarget } from "../storage/object-storage.server.ts";
 import { loadForConvener, loadForReviewer, type SubmissionRow, type WorkflowDeps, isUuid } from "./access.server.ts";
 import { writeAudit } from "./audit.server.ts";
+import { loadForManager } from "./manager.server.ts";
 import { WorkflowError, notFound, type FieldIssue } from "./errors.ts";
 import { assertTransition, isEditable } from "./policy.ts";
 import { issuesOf, uploadInitSchema } from "./schemas.ts";
@@ -367,7 +368,7 @@ export async function sweepAbandonedUploads(
 // --- downloads ----------------------------------------------------------------------------------------------------
 
 export interface DownloadPurpose {
-  as: "convener" | "reviewer";
+  as: "convener" | "reviewer" | "manager";
 }
 
 /**
@@ -388,7 +389,13 @@ export async function createMediaDownloadUrl(
   if (!isUuid(versionId)) throw notFound();
   const db = deps.database.get();
   const sub: SubmissionRow =
-    as === "convener" ? await loadForConvener(db, actor, submissionId) : await loadForReviewer(db, actor, submissionId);
+    as === "convener"
+      ? await loadForConvener(db, actor, submissionId)
+      : as === "manager"
+        ? await loadForManager(db, actor, submissionId)
+        : await loadForReviewer(db, actor, submissionId);
+  // A manager may only fetch the exact media version that was approved.
+  if (as === "manager" && versionId !== sub.currentVersionId) throw notFound();
   const [version] = await db
     .select()
     .from(mediaVersion)

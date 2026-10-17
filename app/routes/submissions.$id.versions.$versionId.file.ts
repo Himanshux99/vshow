@@ -1,6 +1,7 @@
 // GET /submissions/:id/versions/:versionId/file — authorizes, then redirects to a short-lived signed download URL.
 //  - a convener of the submission's committee may download any version of it;
-//  - a reviewer may download only versions that were actually submitted for review (never drafts).
+//  - a reviewer may download only versions that were actually submitted for review (never drafts);
+//  - a server room manager may download only the approved version of an approved submission.
 // The signed URL is only ever sent in the Location header of this response: `no-store`, `no-referrer`, never logged.
 import { data, redirect } from "react-router";
 import type { Route } from "./+types/submissions.$id.versions.$versionId.file";
@@ -12,10 +13,9 @@ import { createMediaDownloadUrl } from "../submissions/uploads.server";
 
 export async function loader({ request, context, params }: Route.LoaderArgs) {
   const scope = getRequestScope(context);
-  const user = await requireRole(scope, request, ["CONVENER", "REVIEWER"]);
-  const capacities = (["convener", "reviewer"] as const).filter((as) =>
-    as === "convener" ? user.roles.includes("CONVENER") : user.roles.includes("REVIEWER"),
-  );
+  const user = await requireRole(scope, request, ["CONVENER", "REVIEWER", "SERVER_ROOM_MANAGER"]);
+  const ROLE_FOR = { convener: "CONVENER", reviewer: "REVIEWER", manager: "SERVER_ROOM_MANAGER" } as const;
+  const capacities = (["convener", "reviewer", "manager"] as const).filter((as) => user.roles.includes(ROLE_FOR[as]));
   let failure: unknown;
   for (const as of capacities) {
     try {

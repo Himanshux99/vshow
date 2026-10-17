@@ -16,6 +16,9 @@ export default [
   // Corporate Communication review (global reviewers).
   route("review", "routes/review._index.tsx"),
   route("review/:id", "routes/review.$id.tsx"),
+  // Server Room Manager: approved media to put on the screens, and marking it done.
+  route("manager", "routes/manager._index.tsx"),
+  route("manager/:id", "routes/manager.$id.tsx"),
   // Local development only: the loader answers 404 unless every dev-auth guard passed at startup.
   route("dev/login", "routes/dev.login.tsx"),
   // Better Auth (OAuth callback). Default-deny allowlist: see app/auth/route-policy.server.ts.

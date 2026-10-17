@@ -47,3 +47,6 @@ export const isVisibleToReviewers = (status: WorkflowStatus) => status !== "DRAF
 
 /** Decisions that must carry a written reason or comment. */
 export const decisionNeedsComment = (decision: ReviewDecisionValue) => decision !== "APPROVED";
+
+/** Longest note a Server Room Manager may attach when marking an approved submission done. */
+export const MANAGER_NOTE_MAX = 1000;

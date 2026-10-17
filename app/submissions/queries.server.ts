@@ -7,8 +7,8 @@ import { committee, screen } from "../db/schema/campus.ts";
 import { appUser } from "../db/schema/identity.ts";
 import { mediaVersion, screenRequest, submission, submissionRevision } from "../db/schema/submissions.ts";
 import type { WorkflowStatus } from "../db/schema/values.ts";
-import { auditEvent, reviewDecision } from "../db/schema/workflow.ts";
-import { loadForConvener, loadForReviewer, type SubmissionRow } from "./access.server.ts";
+import { auditEvent, reviewDecision, scheduleEntry } from "../db/schema/workflow.ts";
+import { loadForConvener, loadForReviewer, type SubmissionRow, type Tx } from "./access.server.ts";
 import { isEditable, isSubmittable } from "./policy.ts";
 
 export interface WindowView {
@@ -74,6 +74,8 @@ interface Head {
   currentRevisionId: string | null;
   resubmissionOf: { id: string; referenceCode: string } | null;
   resubmittedAs: Array<{ id: string; referenceCode: string }>;
+  /** Set once the Server Room Manager has put the approved media on the screens. */
+  liveOnScreens: { at: string; byName: string } | null;
 }
 
 export interface ConvenerSubmissionView extends Head {
@@ -99,8 +101,35 @@ export interface ReviewerSubmissionView extends Head {
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
-async function head(db: Db, row: SubmissionRow): Promise<Head> {
-  const [[com], [creator], previous, children] = await Promise.all([
+/** Active (SCHEDULED) entries for the approved media version of a submission, one per screen. */
+export async function activeScheduleEntries(db: Db | Tx, row: SubmissionRow) {
+  if (!row.currentVersionId) return [];
+  return db
+    .select({ e: scheduleEntry, by: appUser.displayName, screenName: screen.name })
+    .from(scheduleEntry)
+    .innerJoin(appUser, eq(appUser.id, scheduleEntry.updatedByUserId))
+    .innerJoin(screen, eq(screen.id, scheduleEntry.screenId))
+    .where(
+      and(
+        eq(scheduleEntry.submissionId, row.id),
+        eq(scheduleEntry.mediaVersionId, row.currentVersionId),
+        eq(scheduleEntry.status, "SCHEDULED"),
+      ),
+    )
+    .orderBy(asc(screen.name));
+}
+
+async function liveOnScreensOf(db: Db, row: SubmissionRow): Promise<Head["liveOnScreens"]> {
+  if (row.workflowStatus !== "APPROVED") return null;
+  const entries = await activeScheduleEntries(db, row);
+  const first = entries[0];
+  if (!first) return null;
+  const at = entries.reduce((m, x) => (x.e.updatedAt > m ? x.e.updatedAt : m), first.e.updatedAt);
+  return { at: at.toISOString(), byName: first.by };
+}
+
+export async function head(db: Db, row: SubmissionRow): Promise<Head> {
+  const [[com], [creator], previous, children, liveOnScreens] = await Promise.all([
     db
       .select({ id: committee.id, code: committee.code, name: committee.name })
       .from(committee)
@@ -116,6 +145,7 @@ async function head(db: Db, row: SubmissionRow): Promise<Head> {
       .select({ id: submission.id, referenceCode: submission.referenceCode })
       .from(submission)
       .where(eq(submission.resubmissionOfId, row.id)),
+    liveOnScreensOf(db, row),
   ]);
   return {
     id: row.id,
@@ -131,10 +161,11 @@ async function head(db: Db, row: SubmissionRow): Promise<Head> {
     currentRevisionId: row.currentRevisionId,
     resubmissionOf: previous[0] ?? null,
     resubmittedAs: children,
+    liveOnScreens,
   };
 }
 
-async function versionsOf(db: Db, row: SubmissionRow, onlyIds?: string[]): Promise<VersionView[]> {
+export async function versionsOf(db: Db, row: SubmissionRow, onlyIds?: string[]): Promise<VersionView[]> {
   const rows = await db
     .select({ v: mediaVersion, uploader: appUser.displayName })
     .from(mediaVersion)
@@ -169,7 +200,7 @@ interface FrozenWindow {
   note: string | null;
 }
 
-async function revisionsOf(db: Db, row: SubmissionRow): Promise<RevisionView[]> {
+export async function revisionsOf(db: Db, row: SubmissionRow): Promise<RevisionView[]> {
   const revs = await db
     .select()
     .from(submissionRevision)
@@ -392,7 +423,7 @@ export async function listActiveScreens(db: Db) {
  * after approval removes eligibility until the new revision is approved. (The manager queue built on top of this
  * is a later phase.)
  */
-export async function isHandoffEligible(db: Db, submissionId: string): Promise<boolean> {
+export async function isHandoffEligible(db: Db | Tx, submissionId: string): Promise<boolean> {
   const [row] = await db.select().from(submission).where(eq(submission.id, submissionId));
   if (!row || row.workflowStatus !== "APPROVED" || !row.currentRevisionId) return false;
   const [latest] = await db
